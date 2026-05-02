@@ -7,7 +7,7 @@
 bool der_adelante = true; // true = adelante, false = atrás
 bool izq_adelante = true; // true = adelante, false = atrás
 
-// variables de encoder
+// variables de encoders
 
 // ====== VARIABLES VOLÁTILES ======
 volatile long contadorPulsos1 = 0;
