@@ -12,7 +12,7 @@
 #define D_notstate 17 // 1 retrocede 0 avanza
 
 // ===== Parámetros PWM =====
-#define MOTOR_FRECUENCIA 5000
+#define MOTOR_FRECUENCIA 200000 // Frecuencia PWM (200 kHz)
 #define MOTOR_RESOLUCION 8
 #define MOTOR_DUTYCYCLE 70 // 0-255
 #define CANAL_L 0
