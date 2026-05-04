@@ -23,8 +23,8 @@ extern bool izq_adelante; // true = adelante, false = atrás
 
 // ====== PINES DEL ENCODER ======
 // Motor 1 (Rueda Izquierda)
-#define pinA1 36 // GPIO14 (D5)
-#define pinB1 39 // GPIO12 (D6)
+#define pinA1 26 // GPIO14 (D5)
+#define pinB1 27 // GPIO12 (D6)
 
 // Motor 2 (Rueda Derecha)
 #define pinA2 34 // GPIO5 (D1)
