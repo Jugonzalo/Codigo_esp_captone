@@ -5,7 +5,13 @@
 #include "../lib/conexion_serial/conexion_jetson.h"
 #include <Arduino.h>
 
+struct __attribute__((packed)) Envio {
+  uint8_t header = 0xAA; // Byte de inicio para sincronizar
+  int32_t velocidad_izquierda;      // un por ahora dejemoslo como
+  int32_t velocidad_derecha;        // un byte
 
+  uint8_t checksum;      // Para validar integridad
+};
 
 
 
@@ -24,10 +30,7 @@ void setup() {
 //  LOOP
 // =============================================================================
 void loop() {
-
-    leer_datos_jetson(); // Lee datos de Jetson y actualiza velocidades
-    delay(100); // Pequeña pausa para evitar saturar el buffer serial
-    enviar_datos_jetson(); // Envía datos de velocidad actual a Jetson
-
-    delay(1000);
+    leer_datos_jetson();  // Lee datos de Jetson y actualiza velocidades globales
+    enviar_datos_jetson(); // Lee datos de Jetson y actualiza velocidades globales
+    delay(100); // Pequeña pausa para evitar saturar el puerto serial
   }
