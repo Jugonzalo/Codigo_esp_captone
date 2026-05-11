@@ -26,7 +26,7 @@
 #define FACTOR_DIVISOR ((R1 + R2) / R2)
 
 // ===== Constantes Cinemáticas y del Motor =====
-#define RELACION_ENGRANAJES 1.0 
+#define RELACION_ENGRANAJES 21.0 
 #define PPR_TOTAL (11.0 * RELACION_ENGRANAJES) 
 #define DIAMETRO_METROS 0.066 
 #define PERIMETRO_METROS (PI * DIAMETRO_METROS) 

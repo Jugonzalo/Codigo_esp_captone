@@ -96,8 +96,8 @@ void loopEncoders() {
   unsigned long tiempoActual = millis();
 
   // --- Lógica para la Prueba de Duty Cycle Automática ---
-  if (modoPWM && (tiempoActual - tiempoEscalon >= 3000)) {
-    if (dutyCycleActual <= 255) {
+  if (modoPWM && (tiempoActual - tiempoEscalon >= 6000)) {
+    if (dutyCycleActual <= 265) {
       // Aplicar PWM a ambos motores
       ledcWrite(CANAL_L, dutyCycleActual);
       ledcWrite(CANAL_R, dutyCycleActual);
