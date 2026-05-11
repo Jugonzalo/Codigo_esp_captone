@@ -17,8 +17,7 @@
 
 #ifndef _ADAFRUIT_ICM20948_H
 #define _ADAFRUIT_ICM20948_H
-
-#include "Adafruit_ICM20X.h"
+#include <Adafruit_ICM20X.h>
 
 #define ICM20948_I2CADDR_DEFAULT 0x69 ///< ICM20948 default i2c address
 #define ICM20948_MAG_ID 0x09          ///< The chip ID for the magnetometer

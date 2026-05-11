@@ -3,6 +3,7 @@
 #include "../lib/firebase_manager/firebase_manager.h"
 #include "../lib/motor/motor.h"
 #include "../lib/conexion_serial/conexion_jetson.h"
+#include "../lib/sensores/Sensores.h"
 #include <Arduino.h>
 
 struct __attribute__((packed)) Envio {
@@ -23,14 +24,16 @@ void setup() {
 
   //motorSetup();    // Inicializa motores y canales PWM
   //firebaseSetup(); // Conecta WiFi e inicializa Firebase
-  setup_jetson();   // Configura la comunicación serial con Jetson
+  //setup_jetson();   // Configura la comunicación serial con Jetson
+  setup_sensores(); // Configura los sensores
 } 
 
 // =============================================================================
 //  LOOP
 // =============================================================================
 void loop() {
-    leer_datos_jetson();  // Lee datos de Jetson y actualiza velocidades globales
-    enviar_datos_jetson(); // Lee datos de Jetson y actualiza velocidades globales
-    delay(100); // Pequeña pausa para evitar saturar el puerto serial
+    //leer_datos_jetson();  // Lee datos de Jetson y actualiza velocidades globales
+    //enviar_datos_jetson(); // Lee datos de Jetson y actualiza velocidades globales
+    loop_sensores(); // Lee datos de los sensores
+    //delay(100); // Pequeña pausa para evitar saturar el puerto serial
   }
