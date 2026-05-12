@@ -7,7 +7,8 @@ ESP32Encoder encoderIzq, encoderDer;
 float v_act_izq = 0, v_out_izq = 0, v_ramp_izq = 0; 
 // Variables PID Motor Derecho
 float v_act_der = 0, v_out_der = 0, v_ramp_der = 0;       
-
+int duty_L = 0;
+int duty_R = 0;
 // Instancias de QuickPID con los 10 parámetros obligatorios
 QuickPID pidIzq(
   &v_act_izq, &v_out_izq, &v_ramp_izq, 
@@ -46,11 +47,11 @@ void setupMotores() {
     ledcSetup(1, 5000, 8); ledcAttachPin(PWM_R, 1);
 
     // 4. Iniciar PIDs
-    pidIzq.SetOutputLimits(-30.0, 30.0); 
+    pidIzq.SetOutputLimits(-200.0, 200.0); 
     pidIzq.SetSampleTimeUs(50000); // 50ms = 20Hz
     pidIzq.SetMode(QuickPID::Control::timer); 
 
-    pidDer.SetOutputLimits(-30.0, 30.0);
+    pidDer.SetOutputLimits(-200.0, 200.0);
     pidDer.SetSampleTimeUs(50000); 
     pidDer.SetMode(QuickPID::Control::timer); 
 }
@@ -101,8 +102,8 @@ void moverMotores(float ref_izq, float ref_der) {
         return duty_final;
     };
 
-    int duty_L = calcularDuty(v_ramp_izq, v_out_izq, M1_m, M1_b, M1_MIN_DUTY);
-    int duty_R = calcularDuty(v_ramp_der, v_out_der, M2_m, M2_b, M2_MIN_DUTY);
+    duty_L = calcularDuty(v_ramp_izq, v_out_izq, M1_m, M1_b, M1_MIN_DUTY);
+    duty_R = calcularDuty(v_ramp_der, v_out_der, M2_m, M2_b, M2_MIN_DUTY);
 
     // 5. APLICAR DIRECCIÓN Y PWM A LOS MOTORES
     digitalWrite(L_IN1, ref_izq >= 0); 

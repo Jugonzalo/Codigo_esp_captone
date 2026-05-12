@@ -41,7 +41,7 @@ const float METROS_POR_PULSO = 0.0001;
 const float ACCEL_MAX = 0.5; // m/s² para el Soft Start
 
 // Usamos float para aprovechar la FPU nativa de la ESP32
-const float Kp = 100.0, Ki = 50.0, Kd = 1.0; 
+const float Kp = 200.0, Ki = 200.0, Kd = 1.0; 
 
 // Prototipos
 void setupMotores();
@@ -50,5 +50,7 @@ extern float v_act_izq;
 extern float v_act_der;
 extern float v_ramp_izq;
 extern float v_ramp_der;
+extern int duty_L; 
+extern int duty_R;
 
 #endif
