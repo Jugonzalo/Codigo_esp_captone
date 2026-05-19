@@ -23,13 +23,22 @@ QueueHandle_t commandQueue;
 
 QueueHandle_t colaDutyDer;
 QueueHandle_t colaDutyIzq;
+QueueHandle_t colaVeloocidadLeida;
+QueueHandle_t ColaVDerRef;
+QueueHandle_t ColaVIzqRef;
 
 
 
 //---------------- VARAIABLES CORE 0 --------------------
 
-volatile int32_t velocidad_izquierda_core0 = 0;
+volatile int32_t dutyIzqGlobal = 0;
 volatile int32_t velocidad_derecha_core0 = 0;
+volatile float velocidad_actual_der_global;
+volatile float velocidad_actual_izq_global;
+volatile float v_izq_ref_rampa;
+volatile float v_der_ref_rampa;
+
+
 
 
 // ----------------VARIABLES CORE 1 -----------------
@@ -129,8 +138,9 @@ void enviarJetsonTask(void *pvParameters){
     data.header = 0xAA;  // asigno el header
  
     for (;;){
-        data.duty_der = velocidad_izquierda_core0;
-        data.duty_izq = velocidad_derecha_core0 ;
+        data.duty_der = velocidad_derecha_core0;
+        data.duty_izq = dutyIzqGlobal ;
+        data.v_izq = velocidad_actual_izq_global;
 
         // Cálculo simple de checksum (XOR de los datos)
         //data.checksum = (uint8_t)(data.velocidad_izquierda ^ data.velocidad_derecha);
@@ -159,10 +169,13 @@ void leerJetsonTaks(void *pvParameters){
         //Aca envio a la cola de comandos
 
         xQueueSend(colaDutyDer, &data_leida.duty_der ,0);
-        xQueueSend(colaDutyIzq, &data_leida.duty_izq ,0);
+        //xQueueSend(colaDutyIzq, &data_leida.duty_izq ,0);   COMENTA PARA DESACTIVAR Y QUE SOLO FUNCIONE LA OTRA
         velocidad_derecha_core0 = data_leida.duty_der;
-        velocidad_izquierda_core0 = data_leida.duty_izq;
+        //velocidad_izquierda_core0 = data_leida.duty_izq;
 
+        // VREFS  
+        xQueueSend(ColaVIzqRef, &data_leida.v_izq_ref, 0);
+  
         
         while (Serial.available() > 0) {
                 Serial.read(); // Descartamos el byte
@@ -183,9 +196,93 @@ void leerJetsonTaks(void *pvParameters){
 }
 
 
+void pasar_rampa_izq_task(void *pvParameters){
+    float vref;
+    float vRampa;
+    float dt = FRECUENCIA_LECTURA/1000;
+    for (;;){
+        if (xQueueReceive(ColaVIzqRef, &vref,0) == pdTRUE){
+            aplicarRampa(vref, vRampa, dt);
+            v_izq_ref_rampa = vRampa;
+        }
+    }
+}
+void lecturaEncoderIzqTask(void *pvparaameters){
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_ENCODER);               
+    float velocidad_leida; 
+    int ticks;
+
+
+    for (;;){
+        ticks = encoderIzq.getCount();
+        velocidad_leida = encoderIzq.getCount() * METROS_POR_PULSO /(FRECUENCIA_ENCODER/1000); // definir
+        encoderIzq.clearCount();
+
+        //enviar
+        // xQueueSend(colaVeloocidadLeida, &ticks, 0);  // POR AHORA LO DEJARE EN GLOBAL
+        velocidad_actual_izq_global = velocidad_leida;
+    }
+}
+
+
+void pidMotorIzqTask(void *pvparameters){
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_MOTORES);
+    // hare que funcione segun lleguen velocidades
+    float velocidad_actual;
+    float v_out= 0;
+    float v_ramp_ref= 0;
+    float abs_velocidad_actual;
+    float abs_velocidad_ref;
+    int duty;
+
+
+    //seteo el pid
+
+    QuickPID pid(
+    &abs_velocidad_actual, &v_out, &abs_velocidad_ref,   // les puse el absoluto de una
+    Kp, Ki, Kd, 
+    QuickPID::pMode::pOnError, 
+    QuickPID::dMode::dOnMeas, 
+
+    QuickPID::iAwMode::iAwCondition, // <-- CORRECCIÓN: Modo Anti-Windup añadido
+    QuickPID::Action::direct
+    );
+
+    pid.SetOutputLimits(LIMITE_NEGATIVO_PID_MOTOR, LIMITE_POSITIVO_PID_MOTOR);
+    pid.SetSampleTimeUs(FRECUENCIA_MOTORES * 1000);  // la frecuencia pal pid      
+    pid.SetMode(QuickPID::Control::timer); 
+
+
+    for (;;) {
+        velocidad_actual = velocidad_actual_izq_global;
+        v_ramp_ref = v_izq_ref_rampa; // leo el dato global
+        // yo cacho que hare una variable global para la vel_ref ajustada
+        abs_velocidad_actual = abs(velocidad_actual);
+        abs_velocidad_ref = abs(v_ramp_ref);
+        pid.Compute();
+        duty = calcularDuty(abs_velocidad_ref, v_out, M1_m, M1_b, M1_MIN_DUTY);
+        xQueueSend(colaDutyIzq, &duty, 0); // este va aca porque se activa con la cola el otro
+        dutyIzqGlobal = duty;
+
+
+
+
+    vTaskDelayUntil(&xLastWakeTime, xfrec); 
+    }
+}
+
+
+
+
+
 void lecturaImuTask(void *pvparameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_LECTURA);
+
+
+
 }
 
 
@@ -300,7 +397,9 @@ void setup_rtos() {
        NULL, //handel
      0 //core
     );
-    xTaskCreatePinnedToCore(leerJetsonTaks,  "leerdatos",4096,  NULL, 5, NULL, 0);
-    
+    //xTaskCreatePinnedToCore(leerJetsonTaks,  "leerdatos", 4096,  NULL, 5, NULL, 0);
+    //xTaskCreatePinnedToCore(pasar_rampa_izq_task,  "rampaizq",4096,  NULL, 3, NULL, 0);
+    //xTaskCreatePinnedToCore(pidMotorIzqTask,  "pidizq",4096,  NULL, 8, NULL, 0);
+    //xTaskCreatePinnedToCore(lecturaEncoderIzqTask,  "encoderizq",4096,  NULL, 7, NULL, 0);
 
 }

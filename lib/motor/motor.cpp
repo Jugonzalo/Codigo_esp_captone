@@ -2,6 +2,7 @@
 #include "../Debug_mode.h"
 #include "esp32-hal-gpio.h"
 #include <Arduino.h>
+
 // Definición real de los booleanos de dirección (declarados en motor.h con
 // extern)
 bool der_adelante = true; // true = adelante, false = atrás
@@ -27,6 +28,57 @@ const float PPR_TOTAL = PPR * RELACION_ENGRANAJES;
 
 const float DIAMETRO_RUEDA_CM = 6.67;
 const float PERIMETRO_RUEDA_CM = 3.14159 * DIAMETRO_RUEDA_CM;
+
+
+float v_act_izq = 0, v_out_izq = 0, v_ramp_izq = 0; 
+// Variables PID Motor Derecho
+float v_act_der = 0, v_out_der = 0, v_ramp_der = 0;       
+int duty_L = 0;
+int duty_R = 0;
+
+// INICIO EL PID
+QuickPID pidIzq(
+  &v_act_izq, &v_out_izq, &v_ramp_izq, 
+  Kp, Ki, Kd, 
+  QuickPID::pMode::pOnError, 
+  QuickPID::dMode::dOnMeas, 
+  QuickPID::iAwMode::iAwCondition, // <-- CORRECCIÓN: Modo Anti-Windup añadido
+  QuickPID::Action::direct
+);
+
+QuickPID pidDer(
+  &v_act_der, &v_out_der, &v_ramp_der, 
+  Kp, Ki, Kd, 
+  QuickPID::pMode::pOnError, 
+  QuickPID::dMode::dOnMeas, 
+  QuickPID::iAwMode::iAwCondition, // <-- CORRECCIÓN: Modo Anti-Windup añadido
+  QuickPID::Action::direct
+);
+
+//defino las variables
+ESP32Encoder encoderIzq, encoderDer;
+
+
+//VOY A INTENTAR PONER LAS FUNCIONES DEL PID ACA
+void aplicarRampa(float ref, float &ramp, float dt) {
+    float max_step = ACCEL_MAX * dt;
+    if (abs(ref - ramp) < max_step) ramp = ref;
+    else ramp += (ref > ramp) ? max_step : -max_step;
+}
+
+int calcularDuty(float vel_deseada, float correccion_pid, float m, float b, int min_duty) {
+    if (vel_deseada <= 0.01) return 0;
+    
+    float duty_base = (vel_deseada - b) / m;
+    int duty_final = round(duty_base + correccion_pid);
+    
+    if (duty_final < min_duty) duty_final = 0;
+    if (duty_final > MAX_DUTY) duty_final = MAX_DUTY;
+    
+    return duty_final;
+}
+
+
 
 // funcion para que no se solapen las direcciones
 void cambiar_direccion(bool direc_actual, int pin_direccion, int pin_negado,
@@ -232,4 +284,12 @@ void motorSetup() {
   // Adjuntar interrupciones
   attachInterrupt(digitalPinToInterrupt(pinA1), leerEncoder1, RISING);
   attachInterrupt(digitalPinToInterrupt(pinA2), leerEncoder2, RISING);
+
+  ESP32Encoder::useInternalWeakPullResistors = puType::up; // <-- CORRECCIÓN: puType::up en minúsculas
+    encoderIzq.attachFullQuad(pinA1, pinB1);
+    encoderDer.attachFullQuad(pinA2, pinB2);
+    encoderIzq.clearCount();
+    encoderDer.clearCount();
+
+
 }
