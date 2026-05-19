@@ -1,7 +1,7 @@
 // defino las cosas para el macro debug
 #pragma once
 
-#define DEBUG 1
+#define DEBUG 0
 
 #if DEBUG
 // Para strings simples o valores: DEBUG_PRINTLN("hola") / DEBUG_PRINTLN(var)

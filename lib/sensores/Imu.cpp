@@ -14,7 +14,7 @@ void setup_sensores() {
   // defino el i2c
   Wire.begin(pin_serial_clk, pin_serial_Data);
   Wire.setClock(clock_sensor);
-
+  DEBUG_PRINTLN("AAAAAlo");
   delay(100);
 
   DEBUG_PRINTLN("Inicializando ICM20948...");

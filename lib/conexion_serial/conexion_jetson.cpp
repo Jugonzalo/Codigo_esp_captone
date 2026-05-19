@@ -1,8 +1,8 @@
 #include <Arduino.h>
 #include "conexion_jetson.h"
 
-int velocidad_izquierda_global = 0;
-int velocidad_derecha_global = 0;
+extern int velocidad_izquierda_global = 0;
+extern int velocidad_derecha_global = 0;
 
 
 struct __attribute__((packed)) Envio {
@@ -31,6 +31,7 @@ void setup_jetson() {
   if (Serial.available() != 0){
     //llego un error, vuelvo a mandar la wea
     Serial.println("Serial Jetson listo");
+
 
   } 
 }
