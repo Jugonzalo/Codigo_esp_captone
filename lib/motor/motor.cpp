@@ -55,13 +55,12 @@ QuickPID pidDer(
   QuickPID::Action::direct
 );
 
-//defino las variables
-ESP32Encoder encoderIzq, encoderDer;
+
 
 
 //VOY A INTENTAR PONER LAS FUNCIONES DEL PID ACA
 void aplicarRampa(float ref, float &ramp, float dt) {
-    float max_step = ACCEL_MAX * dt;
+    float max_step = (ACCEL_MAX) * dt;
     if (abs(ref - ramp) < max_step) ramp = ref;
     else ramp += (ref > ramp) ? max_step : -max_step;
 }
@@ -275,21 +274,8 @@ void motorSetup() {
   cambiar_velocidad_izquierda(0);
   cambiar_velocidad_derecha(0);
 
-  // encoders
-  pinMode(pinA1, INPUT);
-  pinMode(pinB1, INPUT);
-  pinMode(pinA2, INPUT);
-  pinMode(pinB2, INPUT);
+ 
 
-  // Adjuntar interrupciones
-  attachInterrupt(digitalPinToInterrupt(pinA1), leerEncoder1, RISING);
-  attachInterrupt(digitalPinToInterrupt(pinA2), leerEncoder2, RISING);
-
-  ESP32Encoder::useInternalWeakPullResistors = puType::up; // <-- CORRECCIÓN: puType::up en minúsculas
-    encoderIzq.attachFullQuad(pinA1, pinB1);
-    encoderDer.attachFullQuad(pinA2, pinB2);
-    encoderIzq.clearCount();
-    encoderDer.clearCount();
 
 
 }

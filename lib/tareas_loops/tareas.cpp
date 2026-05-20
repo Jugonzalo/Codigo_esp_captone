@@ -28,15 +28,17 @@ QueueHandle_t ColaVDerRef;
 QueueHandle_t ColaVIzqRef;
 
 
+QueueHandle_t colaVelIzqGlobal;
+
+QueueHandle_t cola_v_izq_rampa;
+
+
 
 //---------------- VARAIABLES CORE 0 --------------------
 
 volatile int32_t dutyIzqGlobal = 0;
 volatile int32_t velocidad_derecha_core0 = 0;
-volatile float velocidad_actual_der_global;
-volatile float velocidad_actual_izq_global;
-volatile float v_izq_ref_rampa;
-volatile float v_der_ref_rampa;
+
 
 
 
@@ -63,8 +65,8 @@ struct __attribute__((packed)) Envio {
   int32_t duty_der;        // un byte
   float teta;
   float teta_ref;
-  int32_t v_der;
-  int32_t v_izq;
+  float v_der;
+  float v_izq;
   int32_t v_der_ref;
   int32_t v_izq_ref;
   int32_t v_total;
@@ -86,8 +88,8 @@ struct __attribute__((packed)) Lectura {
   int32_t duty_izq;      // un por ahora dejemoslo como
   int32_t duty_der;        // un byte
   float teta_ref;
-  int32_t v_der_ref;
-  int32_t v_izq_ref;
+  float v_der_ref;
+  float v_izq_ref;
   int32_t v_total_ref;
   int32_t x_ref;
   int32_t y_ref;  // hasta aca parecen haber 57 bytes
@@ -140,7 +142,11 @@ void enviarJetsonTask(void *pvParameters){
     for (;;){
         data.duty_der = velocidad_derecha_core0;
         data.duty_izq = dutyIzqGlobal ;
-        data.v_izq = velocidad_actual_izq_global;
+
+        xQueuePeek(colaVelIzqGlobal, &data.v_izq, 0);
+        xQueuePeek(cola_v_izq_rampa, &data.v_izq_ref, 0);
+
+       //data.v_izq_ref = v_izq_ref_rampa;
 
         // Cálculo simple de checksum (XOR de los datos)
         //data.checksum = (uint8_t)(data.velocidad_izquierda ^ data.velocidad_derecha);
@@ -169,7 +175,7 @@ void leerJetsonTaks(void *pvParameters){
         //Aca envio a la cola de comandos
 
         xQueueSend(colaDutyDer, &data_leida.duty_der ,0);
-        //xQueueSend(colaDutyIzq, &data_leida.duty_izq ,0);   COMENTA PARA DESACTIVAR Y QUE SOLO FUNCIONE LA OTRA
+        xQueueSend(colaDutyIzq, &data_leida.duty_izq ,0);   //COMENTA PARA DESACTIVAR Y QUE SOLO FUNCIONE LA OTRA
         velocidad_derecha_core0 = data_leida.duty_der;
         //velocidad_izquierda_core0 = data_leida.duty_izq;
 
@@ -197,31 +203,40 @@ void leerJetsonTaks(void *pvParameters){
 
 
 void pasar_rampa_izq_task(void *pvParameters){
-    float vref;
-    float vRampa;
-    float dt = FRECUENCIA_LECTURA/1000;
+
+    float vref = 0;
+    float vRampa = 0;
+    float dt = FRECUENCIA_ENCODER / 1000.0f;
     for (;;){
-        if (xQueueReceive(ColaVIzqRef, &vref,0) == pdTRUE){
+        if (xQueueReceive(ColaVIzqRef, &vref,portMAX_DELAY) == pdTRUE){
             aplicarRampa(vref, vRampa, dt);
-            v_izq_ref_rampa = vRampa;
+
+            xQueueOverwrite(cola_v_izq_rampa, &vref);
         }
     }
 }
 void lecturaEncoderIzqTask(void *pvparaameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_ENCODER);               
-    float velocidad_leida; 
+    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_ENCODER);      
+    float velocidad_leida = 0; 
     int ticks;
-
-
+    ESP32Encoder encoder;
+    ESP32Encoder::useInternalWeakPullResistors = puType::up; // <-- CORRECCIÓN: puType::up en minúsculas
+    encoder.attachFullQuad(pinA1, pinB1);  // cambia los pines pal derecho
+    encoder.clearCount();
+  
+    float prueba = 0;
     for (;;){
-        ticks = encoderIzq.getCount();
-        velocidad_leida = encoderIzq.getCount() * METROS_POR_PULSO /(FRECUENCIA_ENCODER/1000); // definir
-        encoderIzq.clearCount();
+        ticks = encoder.getCount();
+        encoder.clearCount();
+        velocidad_leida = ticks * METROS_POR_PULSO * 1000.0 / FRECUENCIA_ENCODER;
+        
 
         //enviar
         // xQueueSend(colaVeloocidadLeida, &ticks, 0);  // POR AHORA LO DEJARE EN GLOBAL
-        velocidad_actual_izq_global = velocidad_leida;
+        xQueueOverwrite(colaVelIzqGlobal, &velocidad_leida);
+        prueba += 1;
+        vTaskDelayUntil(&xLastWakeTime, xfrec);
     }
 }
 
@@ -256,8 +271,8 @@ void pidMotorIzqTask(void *pvparameters){
 
 
     for (;;) {
-        velocidad_actual = velocidad_actual_izq_global;
-        v_ramp_ref = v_izq_ref_rampa; // leo el dato global
+        //velocidad_actual = velocidad_actual_izq_global;
+        //v_ramp_ref = v_izq_ref_rampa; // leo el dato global
         // yo cacho que hare una variable global para la vel_ref ajustada
         abs_velocidad_actual = abs(velocidad_actual);
         abs_velocidad_ref = abs(v_ramp_ref);
@@ -367,6 +382,11 @@ void setup_rtos() {
 
     colaDutyDer = xQueueCreate(1, sizeof(int));
     colaDutyIzq = xQueueCreate(1, sizeof(int));
+    ColaVIzqRef = xQueueCreate(1, sizeof(float));
+
+    cola_v_izq_rampa  = xQueueCreate(1, sizeof(float));;
+
+    colaVelIzqGlobal = xQueueCreate(1, sizeof(float));
 
 
 
@@ -397,9 +417,9 @@ void setup_rtos() {
        NULL, //handel
      0 //core
     );
-    //xTaskCreatePinnedToCore(leerJetsonTaks,  "leerdatos", 4096,  NULL, 5, NULL, 0);
-    //xTaskCreatePinnedToCore(pasar_rampa_izq_task,  "rampaizq",4096,  NULL, 3, NULL, 0);
-    //xTaskCreatePinnedToCore(pidMotorIzqTask,  "pidizq",4096,  NULL, 8, NULL, 0);
-    //xTaskCreatePinnedToCore(lecturaEncoderIzqTask,  "encoderizq",4096,  NULL, 7, NULL, 0);
+    xTaskCreatePinnedToCore(leerJetsonTaks,  "leerdatos", 4096,  NULL, 5, NULL, 0);
+    xTaskCreatePinnedToCore(pasar_rampa_izq_task,  "rampaizq",4096,  NULL, 3, NULL, 1);
+    //xTaskCreatePinnedToCore(pidMotorIzqTask,  "pidizq",4096,  NULL, 8, NULL, 1);
+    xTaskCreatePinnedToCore(lecturaEncoderIzqTask,  "encizq",4096,  NULL, 7, NULL, 1);
 
 }

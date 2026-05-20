@@ -16,8 +16,14 @@
 
 
 
+// ====== PINES DEL ENCODER ======
+// Motor 1 (Rueda Izquierda)
+#define pinA1 26 // GPIO14 (D5)
+#define pinB1 27 // GPIO12 (D6)
 
-
+// Motor 2 (Rueda Derecha)
+#define pinA2 34 // GPIO5 (D1)
+#define pinB2 35 // GPIO4 (D2)
 
 
 
