@@ -23,14 +23,28 @@ QueueHandle_t commandQueue;
 
 QueueHandle_t colaDutyDer;
 QueueHandle_t colaDutyIzq;
-QueueHandle_t colaVeloocidadLeida;
+QueueHandle_t colaVelocidadLeida;
 QueueHandle_t ColaVDerRef;
 QueueHandle_t ColaVIzqRef;
 
 
 QueueHandle_t colaVelIzqGlobal;
-
 QueueHandle_t cola_v_izq_rampa;
+QueueHandle_t colaEscrituraDutyIzq;
+
+
+
+// TAL PARECE QUE CADA VARIABLE NECESITARA COLA DE ENVIO Y COLA DE LECTURA.
+
+
+QueueHandle_t ColaLectorDutyIzq;
+QueueHandle_t ColaUsoDutyIzq;
+
+QueueHandle_t ColaLectorVelIzq;
+QueueHandle_t ColaUsoVelIzq;
+
+QueueHandle_t ColaUsoVREFIzq;
+
 
 
 
@@ -141,10 +155,9 @@ void enviarJetsonTask(void *pvParameters){
  
     for (;;){
         data.duty_der = velocidad_derecha_core0;
-        data.duty_izq = dutyIzqGlobal ;
-
         xQueuePeek(colaVelIzqGlobal, &data.v_izq, 0);
         xQueuePeek(cola_v_izq_rampa, &data.v_izq_ref, 0);
+        xQueuePeek(colaEscrituraDutyIzq, &data.duty_izq, 0);
 
        //data.v_izq_ref = v_izq_ref_rampa;
 
@@ -175,7 +188,7 @@ void leerJetsonTaks(void *pvParameters){
         //Aca envio a la cola de comandos
 
         xQueueSend(colaDutyDer, &data_leida.duty_der ,0);
-        xQueueSend(colaDutyIzq, &data_leida.duty_izq ,0);   //COMENTA PARA DESACTIVAR Y QUE SOLO FUNCIONE LA OTRA
+        //xQueueSend(colaDutyIzq, &data_leida.duty_izq ,0);   //COMENTA PARA DESACTIVAR Y QUE SOLO FUNCIONE LA OTRA
         velocidad_derecha_core0 = data_leida.duty_der;
         //velocidad_izquierda_core0 = data_leida.duty_izq;
 
@@ -204,6 +217,9 @@ void leerJetsonTaks(void *pvParameters){
 
 void pasar_rampa_izq_task(void *pvParameters){
 
+
+
+
     float vref = 0;
     float vRampa = 0;
     float dt = FRECUENCIA_ENCODER / 1000.0f;
@@ -215,6 +231,7 @@ void pasar_rampa_izq_task(void *pvParameters){
         }
     }
 }
+
 void lecturaEncoderIzqTask(void *pvparaameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_ENCODER);      
@@ -233,13 +250,11 @@ void lecturaEncoderIzqTask(void *pvparaameters){
         
 
         //enviar
-        // xQueueSend(colaVeloocidadLeida, &ticks, 0);  // POR AHORA LO DEJARE EN GLOBAL
-        xQueueOverwrite(colaVelIzqGlobal, &velocidad_leida);
-        prueba += 1;
+        xQueueOverwrite(colaVelIzqGlobal, &velocidad_leida);  // para la lectura
+        xQueueSend(colaVelocidadLeida, &velocidad_leida, 0);   // para activar el pid
         vTaskDelayUntil(&xLastWakeTime, xfrec);
     }
 }
-
 
 void pidMotorIzqTask(void *pvparameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
@@ -269,17 +284,17 @@ void pidMotorIzqTask(void *pvparameters){
     pid.SetSampleTimeUs(FRECUENCIA_MOTORES * 1000);  // la frecuencia pal pid      
     pid.SetMode(QuickPID::Control::timer); 
 
-
     for (;;) {
-        //velocidad_actual = velocidad_actual_izq_global;
-        //v_ramp_ref = v_izq_ref_rampa; // leo el dato global
+        xQueueReceive(colaVelocidadLeida, &velocidad_actual, 0);
+        xQueueReceive(ColaVIzqRef, &v_ramp_ref,0); // por ahora dejare que reciba de colavizqref
         // yo cacho que hare una variable global para la vel_ref ajustada
         abs_velocidad_actual = abs(velocidad_actual);
         abs_velocidad_ref = abs(v_ramp_ref);
         pid.Compute();
         duty = calcularDuty(abs_velocidad_ref, v_out, M1_m, M1_b, M1_MIN_DUTY);
         xQueueSend(colaDutyIzq, &duty, 0); // este va aca porque se activa con la cola el otro
-        dutyIzqGlobal = duty;
+        //dutyIzqGlobal = duty;
+        xQueueOverwrite(colaEscrituraDutyIzq, &duty); // para que el envio a jetson tenga la ultima wea
 
 
 
@@ -332,9 +347,8 @@ void taskControl(void *pvParameters) {
     }
 }
 
-// --- TAREA 2: MOTORES (Core 1) ---
-// Prioridad Media: Aplicar PWM a los drivers
 void taskMotors(void *pvParameters) {
+
     float targetSpeed = 0; // esta variable queda interna para la tarea
     for (;;) {
         // Revisar si hay un nuevo comando de velocidad desde la Jetson
@@ -349,10 +363,6 @@ void taskMotors(void *pvParameters) {
     }
 }
 
-
-
-// --- TAREA 3: COMUNICACIÓN SERIAL (Core 0) ---
-// Prioridad Media: Puente entre ESP32 y Jetson Nano
 void taskSerial(void *pvParameters) {
     TelemetryData incomingData; // creas el objeto que recibira data
     for (;;) {
@@ -388,6 +398,10 @@ void setup_rtos() {
 
     colaVelIzqGlobal = xQueueCreate(1, sizeof(float));
 
+    colaEscrituraDutyIzq = xQueueCreate(1, sizeof(int));
+
+    colaVelocidadLeida = xQueueCreate(1, sizeof(float));
+
 
 
     xTaskCreatePinnedToCore(
@@ -418,8 +432,8 @@ void setup_rtos() {
      0 //core
     );
     xTaskCreatePinnedToCore(leerJetsonTaks,  "leerdatos", 4096,  NULL, 5, NULL, 0);
-    xTaskCreatePinnedToCore(pasar_rampa_izq_task,  "rampaizq",4096,  NULL, 3, NULL, 1);
-    //xTaskCreatePinnedToCore(pidMotorIzqTask,  "pidizq",4096,  NULL, 8, NULL, 1);
+    //xTaskCreatePinnedToCore(pasar_rampa_izq_task,  "rampaizq",4096,  NULL, 3, NULL, 1);   ESTA DANDO MUCHOS PROBELMAS LA RAMPA, LA bypaseare
+    xTaskCreatePinnedToCore(pidMotorIzqTask,  "pidizq",4096,  NULL, 8, NULL, 1);
     xTaskCreatePinnedToCore(lecturaEncoderIzqTask,  "encizq",4096,  NULL, 7, NULL, 1);
 
 }

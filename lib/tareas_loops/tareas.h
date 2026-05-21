@@ -8,7 +8,7 @@
 #define FRECUENCIA_LECTURA 100    //
 #define FRECUENCIA_ENVIO 100
 #define FRECUENCIA_IMU 10
-#define FRECUENCIA_ENCODER 1
+#define FRECUENCIA_ENCODER 10
 
 #define LIMITE_POSITIVO_PID_MOTOR 200
 #define LIMITE_NEGATIVO_PID_MOTOR -200
@@ -18,12 +18,12 @@
 
 // ====== PINES DEL ENCODER ======
 // Motor 1 (Rueda Izquierda)
-#define pinA1 26 // GPIO14 (D5)
-#define pinB1 27 // GPIO12 (D6)
+#define pinA1 27 // GPIO14 (D5) PARECE QUE LOS COLORES ESTAN INVERTIDOS POR LO QUE LOS DARE VUELTA EN SOFTWERE
+#define pinB1 26 // GPIO12 (D6)
 
 // Motor 2 (Rueda Derecha)
-#define pinA2 34 // GPIO5 (D1)
-#define pinB2 35 // GPIO4 (D2)
+#define pinA2 35 // GPIO5 (D1)
+#define pinB2 34 // GPIO4 (D2)
 
 
 
