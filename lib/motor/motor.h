@@ -8,7 +8,7 @@
 #define PWM_izquierdo 23 // PWM izquierdo
 #define PWM_derecho 16   // PWM derecho
 
-#define L_state 19    // 1 avanza 0 retrocede
+#define L_state 19    // 1 avanza 0  
 #define L_notstate 18 // 1 retrocede 0 avanza
 
 #define D_state 25    // 1 avanza 0 retrocede
@@ -26,8 +26,8 @@ extern bool izq_adelante; // true = adelante, false = atrás
 
 // ====== PINES DEL ENCODER ======
 // Motor 1 (Rueda Izquierda)
-#define pinA1 26 // GPIO14 (D5)
-#define pinB1 27 // GPIO12 (D6)
+#define pinA1 26 // GPIO14 (D5)   FASE A (AMARILLO )
+#define pinB1 27 // GPIO12 (D6) FASE B (VERDE)
 
 // Motor 2 (Rueda Derecha)
 #define pinA2 34 // GPIO5 (D1)

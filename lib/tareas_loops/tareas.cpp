@@ -48,9 +48,9 @@ struct __attribute__((packed)) Envio {
   int32_t duty_izq;      // un por ahora dejemoslo como
   int32_t duty_der;        // un byte
   float teta;
-  float teta_ref;
-  float v_der;
-  float v_izq;
+  float teta_ref; //4
+  float v_der; //5
+  float v_izq; //6
   int32_t v_der_ref;
   int32_t v_izq_ref;
   int32_t v_total;
@@ -355,39 +355,39 @@ void leerJetsonTaks(void *pvParameters){
     for (;;) {
         // Verificamos si hay al menos el tamaño de la estructura en el buffer
         if (Serial.available() >= sizeof(Lectura)) {
-        // Leemos los bytes y los "volcamos" en la dirección de memoria de 'data_leida'
-        Serial.readBytes((uint8_t*)&data_leida, sizeof(data_leida));
-        // Validamos el header para no procesar basura
-        if (data_leida.header == 0xAA) {
+            // Leemos los bytes y los "volcamos" en la dirección de memoria de 'data_leida'
+            Serial.readBytes((uint8_t*)&data_leida, sizeof(data_leida));
+            // Validamos el header para no procesar basura
+            if (data_leida.header == 0xAA) {
 
 
-        // ------------------------------MANEJO DE COLAS ------------------------------
+            // ------------------------------MANEJO DE COLAS ------------------------------
 
-        //------------------DUTY----------------
-        //xQueueSend(ColaUsoDutyIzq, &data_leida.duty_izq ,0);   //COMENTA PARA DESACTIVAR Y QUE SOLO FUNCIONE LA OTRA
-        //XqueueSend(ColaUsoDutyIzq, &data_leida.duty_der ,0); 
+            //------------------DUTY----------------
+            //xQueueSend(ColaUsoDutyIzq, &data_leida.duty_izq ,0);   //COMENTA PARA DESACTIVAR Y QUE SOLO FUNCIONE LA OTRA
+            //XqueueSend(ColaUsoDutyIzq, &data_leida.duty_der ,0); 
 
-        //------------------TETA----------------
+            //------------------TETA----------------
 
 
-        // ------------------VREF_IZQ_DER----------------
-        xQueueSend(ColaUsoVREFIzq, &data_leida.v_izq_ref, 0);
-        xQueueSend(ColaUsoVREFDer, &data_leida.v_der_ref, 0);
+            // ------------------VREF_IZQ_DER----------------
+            xQueueSend(ColaUsoVREFIzq, &data_leida.v_izq_ref, 0);
+            xQueueSend(ColaUsoVREFDer, &data_leida.v_der_ref, 0);
 
-        // ------------------V_TOTAL_REF----------------
-        
+            // ------------------V_TOTAL_REF----------------
+            
 
-        // ------------------X_REF_Y_REF----------------
-  
+            // ------------------X_REF_Y_REF----------------
+    
 
-        // LIMPIEZA
-        while (Serial.available() > 0) {Serial.read();}}// Descartamos el byte
+            // LIMPIEZA
+            while (Serial.available() > 0) {Serial.read();}}// Descartamos el byte
         else {// Si el header está mal, el buffer está desincronizado // Limpiamos todo
             while (Serial.available() > 0) {Serial.read();}} // Descartamos el byte   
         
+        }
     vTaskDelayUntil(&xLastWakeTime, xfrec);
     }
-}
 }
 /// ------------------------------------SETUP ------------------------------------
  
