@@ -176,15 +176,28 @@ void pidMotorIzqTask(void *pvparameters){
         xQueueReceive(ColaUsoVelIzq, &velocidad_actual, 0);
         xQueueReceive(ColaUsoVREFIzq, &v_ramp_ref,0); //AHORA MISMO BYPASEO LA RAMPA
 
-        //CALCULO SEGUN VALORES ABSOLUTOS
+        // CALCULO SEGUN VALORES ABSOLUTOS
         abs_velocidad_actual = abs(velocidad_actual);
         abs_velocidad_ref = abs(v_ramp_ref);
+        
         pid.Compute();
-        duty = calcularDuty(abs_velocidad_ref, v_out, M1_m, M1_b, M1_MIN_DUTY);
+        
+        // Obtenemos la magnitud bruta del PWM, tiene que ser positiva para el PID
+        int duty_magnitud = calcularDuty(abs_velocidad_ref, v_out, M1_m, M1_b, M1_MIN_DUTY);
+
+        if (v_ramp_ref < 0) {
+            duty = -duty_magnitud;
+        } else {
+            duty = duty_magnitud; 
+        }
+
+        // ENVIO
+        xQueueSend(ColaUsoDutyIzq, &duty, 0); //este va aca porque se activa con la cola el otro 
+        xQueueOverwrite(ColaLectorDutyIzq, &duty); // para que el envio a jetson tenga la ultima wea
+
 
         //ENVIO
-        xQueueSend(ColaUsoDutyIzq, &duty, 0); // este va aca porque se activa con la cola el otro 
-        xQueueOverwrite(ColaLectorDutyIzq, &duty); // para que el envio a jetson tenga la ultima wea
+   
     // DELAY
     vTaskDelayUntil(&xLastWakeTime, xfrec); 
     }
@@ -224,19 +237,30 @@ void pidMotorDerTask(void *pvparameters){
         xQueueReceive(ColaUsoVelDer, &velocidad_actual, 0);
         xQueueReceive(ColaUsoVREFDer, &v_ramp_ref,0); //AHORA MISMO BYPASEO LA RAMPA 
 
-        //CALCULO SEGUN VALORES ABSOLUTOS
+        // CALCULO SEGUN VALORES ABSOLUTOS
         abs_velocidad_actual = abs(velocidad_actual);
         abs_velocidad_ref = abs(v_ramp_ref);
+        
         pid.Compute();
-        duty = calcularDuty(abs_velocidad_ref, v_out, M1_m, M1_b, M1_MIN_DUTY);
+        
+        // Obtenemos la magnitud bruta del PWM (tiene que ser positiva)
+        int duty_magnitud = calcularDuty(abs_velocidad_ref, v_out, M1_m, M1_b, M1_MIN_DUTY);
 
-        //ENVIO
-        xQueueSend(ColaUsoDutyDer, &duty, 0); // este va aca porque se activa con la cola el otro 
+        if (v_ramp_ref < 0) {
+            duty = -duty_magnitud; 
+        } else {
+            duty = duty_magnitud;  
+        }
+
+        // ENVIO
+        xQueueSend(ColaUsoDutyDer, &duty, 0); // este va aca porque se activa con la cola el otro
         xQueueOverwrite(ColaLectorDutyDer, &duty); // para que el envio a jetson tenga la ultima wea
+
     // DELAY
     vTaskDelayUntil(&xLastWakeTime, xfrec); 
     }
 }
+
 
 // -----------------LECTURA DE SENSORES ----------------
 //ENCODERS
@@ -250,7 +274,7 @@ void lecturaEncoderIzqTask(void *pvparaameters){
 
     ESP32Encoder encoder;
     ESP32Encoder::useInternalWeakPullResistors = puType::up; // <-- CORRECCIÓN: puType::up en minúsculas
-    encoder.attachFullQuad(pinA1, pinB1);  // cambia los pines pal derecho
+    encoder.attachFullQuad(pinB1, pinA1);  // cambia los pines pal derecho
     encoder.clearCount();
     // LOOP
     for (;;){
@@ -276,7 +300,7 @@ void lecturaEncoderDerTask(void *pvparaameters){
 
     ESP32Encoder encoder;
     ESP32Encoder::useInternalWeakPullResistors = puType::up; // <-- CORRECCIÓN: puType::up en minúsculas
-    encoder.attachFullQuad(pinA2, pinB2); 
+    encoder.attachFullQuad(pinB2, pinA2); 
     encoder.clearCount();
     // LOOP
     for (;;){
