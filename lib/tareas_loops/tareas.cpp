@@ -40,6 +40,26 @@ QueueHandle_t ColaLecturaVREFIzq;
 //DERECHO
 QueueHandle_t ColaUsoVREFDer;
 QueueHandle_t ColaLecturaVREFDer;
+//V_TOTAL_REF
+QueueHandle_t ColaUsoVREFTotal;
+QueueHandle_t ColaLecturaVREFTotal;
+//---------------------COLAS Teta---------------------
+// teta medido
+QueueHandle_t ColaUsoTeta;
+QueueHandle_t ColaLecturaTeta;
+//teta ref
+QueueHandle_t ColaUsoTetaRef;
+QueueHandle_t ColaLecturaTetaRef;
+//---------------------COLAS POSICION---------------------
+//posicion medida  (Puedo ponerle 2 objetos a la queue)
+QueueHandle_t ColaUsoPosicion;
+QueueHandle_t ColaLecturaPosicion;
+//posicion ref
+QueueHandle_t ColaUsoPosicionRef;
+QueueHandle_t ColaLecturaPosicionRef;
+
+
+
 
 // ---------ESTRUCTURA DE TELEMETRIA -----------
 
@@ -106,7 +126,7 @@ void motorizquierdoSwitchTask(void *pvParameters){
         }
     }
 }
-//---------------- CONTROL MOTORES----------------
+//---------------- CONTROL VELOCIDAD----------------
 //Rampas
 void pasar_rampa_izq_task(void *pvParameters){
 
@@ -261,6 +281,31 @@ void pidMotorDerTask(void *pvparameters){
     }
 }
 
+// --------------- CONTROL DE ANGULO ------------------
+void pidControlDireccionAngularTask(void *pvParameters){
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+
+
+    for(;;){
+        if (xQueueReceive(ColaUsoDutyteta, &velocidad_nueva, portMAX_DELAY) == pdTRUE){
+            // -- LENAR --
+
+
+        }
+    }
+}
+
+//--------------- CONTROL DE POSCICION -----------------
+void pidControlPosicionTask(void *pvParameters){
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    for (;;){
+        if (xQueueReceive(ColaPosicion, &velocidad_nueva, portMAX_DELAY) == pdTRUE){
+            // ---- LENAR ----
+
+
+        }
+    }
+}
 
 // -----------------LECTURA DE SENSORES ----------------
 //ENCODERS
@@ -326,6 +371,19 @@ void lecturaImuTask(void *pvparameters){
 
 }
 
+//Sensores de poscicion
+void lecturaPosicionTask(void *pvParameters){
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_LECTURA);
+}
+// ---------------CALCULO DE POSCICION---------------
+//Estimador de poscicion
+void estimadorDePoscicionTask(void *pvParameters){
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    for (;;){
+        // -- LENAR --
+    }
+}
 //  ----------------ENVIO DE DATOS A JETSON ----------------
 
 void enviarJetsonTask(void *pvParameters){
