@@ -28,6 +28,8 @@ void setup() {
   //firebaseSetup(); // Conecta WiFi e inicializa Firebase
   setup_jetson();   // Configura la comunicación serial con Jetson
   //setup_sensores(); // Configura los sensores
+  //  setup_calibracion_imu(); // Configura la calibración del IMU
+
 
 
   setup_rtos(); // inicia todas las task
@@ -42,6 +44,7 @@ void loop() {
     //loop_sensores(); // Lee datos de los sensores
     //delay(100); // Pequeña pausa para evitar saturar el puerto serial
     //loop_sensores();
+    //loop_calibracion_imu(); // Lee datos de los sensores
     //cambiar_velocidad_derecha(velocidad_derecha_global);
     //cambiar_velocidad_izquierda(velocidad_izquierda_global);
     vTaskDelete(NULL);  // DEJA SOLO ESTA PRENDIDA SI QUIERES USAR EL RTOS

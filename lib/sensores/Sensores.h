@@ -15,6 +15,8 @@
 
 void setup_sensores();
 void loop_sensores();
+void setup_calibracion_imu();
+void loop_calibracion_imu();
 
 
 #endif // Sensores_H
