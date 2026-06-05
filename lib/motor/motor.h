@@ -37,9 +37,6 @@ extern ESP32Encoder encoderIzq;
 extern ESP32Encoder encoderDer;
 
 
-
-
-
 // ===== CARACTERIZACIÓN EN m/s (Y = mX + b) =====
 // Motor 1 (Izquierdo)
 const float M1_m = 0.00709362;
