@@ -3,8 +3,9 @@
 #include "Adafruit_ICM20948.h"
 #include "Adafruit_Sensor.h"
 
-Adafruit_ICM20948 icm;
-// este codifo es para probar unas cosas nomas, no lo pesquen 
+// 'static' para no chocar con el objeto global 'icm' de Imu.cpp (banco de pruebas)
+static Adafruit_ICM20948 icm;
+// este codifo es para probar unas cosas nomas, no lo pesquen
 #define pin_serial_Data  21  // SDA
 #define pin_serial_clk 22    // SCL
 #define clock_sensor 100000
