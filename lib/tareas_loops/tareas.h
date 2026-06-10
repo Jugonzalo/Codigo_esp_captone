@@ -72,9 +72,6 @@ void setup_rtos();
 
 
 // Esta funciones las dejare definidas por mientras como ejemplo
-void taskControl(void *pvParameters);
-void taskMotors(void *pvParameters);
-void taskSerial(void *pvParameters);
 void taskSystemMonitor(void *pvParameters);
 void motorderechoSwitchTask(void *pvParameters);
 void motorizquierdoSwitchTask(void *pvParameters);
