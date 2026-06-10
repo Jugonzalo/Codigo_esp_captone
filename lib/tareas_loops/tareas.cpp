@@ -78,8 +78,8 @@ struct __attribute__((packed)) Envio {
   float teta_ref; //4
   float v_der; //5
   float v_izq; //6
-  int32_t v_der_ref;
-  int32_t v_izq_ref;
+  float v_der_ref;
+  float v_izq_ref;
   int32_t v_total;
   int32_t v_total_ref;
   int32_t x_pos;
