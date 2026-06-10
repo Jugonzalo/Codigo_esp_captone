@@ -134,7 +134,7 @@ void motorizquierdoSwitchTask(void *pvParameters){
         }
     }
 }
-//---------------- CONTROL VELOCIDAD----------------
+//---------------- CONTROL MOTORES----------------
 //Rampas
 void pasar_rampa_izq_task(void *pvParameters){
 
@@ -399,19 +399,6 @@ void lecturaImuTask(void *pvparameters){
 
 }
 
-//Sensores de poscicion
-void lecturaPosicionTask(void *pvParameters){
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_LECTURA);
-}
-// ---------------CALCULO DE POSCICION---------------
-//Estimador de poscicion
-void estimadorDePoscicionTask(void *pvParameters){
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-    for (;;){
-        // -- LENAR --
-    }
-}
 //  ----------------ENVIO DE DATOS A JETSON ----------------
 
 void enviarJetsonTask(void *pvParameters){
