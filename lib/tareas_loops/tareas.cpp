@@ -50,10 +50,6 @@ QueueHandle_t ColaLecturaTeta;
 //teta ref
 QueueHandle_t ColaUsoTetaRef;
 QueueHandle_t ColaLecturaTetaRef;
-//---------------------v_angular Teta---------------------
-QueueHandle_t ColaUsoVAngular;
-QueueHandle_t ColaLecturaVAngular;
-
 //---------------------COLAS POSICION---------------------
 //posicion medida  (Puedo ponerle 2 objetos a la queue)
 QueueHandle_t ColaUsoPosicion;
@@ -61,10 +57,7 @@ QueueHandle_t ColaLecturaPosicion;
 //posicion ref
 QueueHandle_t ColaUsoPosicionRef;
 QueueHandle_t ColaLecturaPosicionRef;
-struct PosicionRef {
-    float x;
-    float y;
-};
+
 
 
 
@@ -94,12 +87,11 @@ struct __attribute__((packed)) Lectura {
   int32_t duty_izq;      // un por ahora dejemoslo como
   int32_t duty_der;        // un byte
   float teta_ref;
-  float w_ref;
   float v_der_ref;
   float v_izq_ref;
-  float v_total_ref;
-  float x_ref;
-  float y_ref;  // hasta aca parecen haber 57 bytes
+  int32_t v_total_ref;
+  int32_t x_ref;
+  int32_t y_ref;  // hasta aca parecen haber 57 bytes
 
 };
 /// ---------------------MIS FUNCIONES ------------------------
@@ -182,15 +174,11 @@ void pidMotorIzqTask(void *pvparameters){
     float abs_velocidad_ref;
     //VALOR FINAL
     int duty;
-    float kp = Kp_motor_izquierdo;
-    float ki = Ki_motor_izquierdo;
-    float kd = Kd_motor_izquierdo;
-
 
     //SETEO EL PID
     QuickPID pid(
     &abs_velocidad_actual, &v_out, &abs_velocidad_ref,   // les puse el absoluto de una
-    kp, ki, kd, 
+    Kp, Ki, Kd, 
     QuickPID::pMode::pOnError, 
     QuickPID::dMode::dOnMeas, 
     QuickPID::iAwMode::iAwCondition, // <-- CORRECCIÓN: Modo Anti-Windup añadido
@@ -247,14 +235,11 @@ void pidMotorDerTask(void *pvparameters){
     float abs_velocidad_ref;
     //VALOR FINAL
     int duty;
-    float kp = Kp_motor_derecho;
-    float ki = Ki_motor_derecho;
-    float kd = Kd_motor_derecho;
 
     //SETEO EL PID
     QuickPID pid(
     &abs_velocidad_actual, &v_out, &abs_velocidad_ref,   // les puse el absoluto de una
-    kp, ki, kd, 
+    Kp, Ki, Kd, 
     QuickPID::pMode::pOnError, 
     QuickPID::dMode::dOnMeas, 
     QuickPID::iAwMode::iAwCondition, // <-- CORRECCIÓN: Modo Anti-Windup añadido
@@ -299,28 +284,13 @@ void pidMotorDerTask(void *pvparameters){
 // --------------- CONTROL DE ANGULO ------------------
 void pidControlDireccionAngularTask(void *pvParameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_MOTORES);
+
 
     for(;;){
+        if (xQueueReceive(ColaUsoDutyteta, &velocidad_nueva, portMAX_DELAY) == pdTRUE){
+            // -- LENAR --
 
 
-    }
-}
-
-void velocidadAngularVtotaltask(void *pvParameters){
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-    float velocidad_total = 0;
-    float velocidad_angular_nueva = 0;
-    float v_der_out = 0;
-    float v_izq_out = 0;
-    for (;;){
-        if (xQueueReceive(ColaUsoVAngular, &velocidad_angular_nueva, portMAX_DELAY) == pdTRUE || xQueueReceive( ColaUsoVREFTotal, &velocidad_total, portMAX_DELAY) == pdTRUE){
-        //uso la formula
-        v_izq_out = (2* velocidad_total - velocidad_angular_nueva * LARGO_ENTRE_RUEDAS) / RADIO_DE_RUEDA;
-        v_der_out = velocidad_total * (2/RADIO_DE_RUEDA) - v_izq_out;
-        //ENVIO
-        xQueueSend(ColaUsoVREFIzq, &v_izq_out, 0);
-        xQueueSend(ColaUsoVREFDer, &v_der_out, 0);
         }
     }
 }
@@ -328,12 +298,14 @@ void velocidadAngularVtotaltask(void *pvParameters){
 //--------------- CONTROL DE POSCICION -----------------
 void pidControlPosicionTask(void *pvParameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
-
     for (;;){
-    // 
+        if (xQueueReceive(ColaPosicion, &velocidad_nueva, portMAX_DELAY) == pdTRUE){
+            // ---- LENAR ----
+
+
+        }
     }
 }
-
 
 // -----------------LECTURA DE SENSORES ----------------
 //ENCODERS
@@ -472,33 +444,23 @@ void leerJetsonTaks(void *pvParameters){
 
 
             // ------------------------------MANEJO DE COLAS ------------------------------
+
             //------------------DUTY----------------
-            if (true) { // FALSE SI NO QUIERES USARLO
-            xQueueSend(ColaUsoDutyIzq, &data_leida.duty_izq ,0);   //COMENTA PARA DESACTIVAR Y QUE SOLO FUNCIONE LA OTRA
-            xQueueSend(ColaUsoDutyDer, &data_leida.duty_der ,0); 
-            }
+            //xQueueSend(ColaUsoDutyIzq, &data_leida.duty_izq ,0);   //COMENTA PARA DESACTIVAR Y QUE SOLO FUNCIONE LA OTRA
+            //XqueueSend(ColaUsoDutyIzq, &data_leida.duty_der ,0); 
+
             //------------------TETA----------------
-            if (true) {  // FALSE SI NO QUIERES USARLO
-                xQueueSend(ColaUsoTetaRef, &data_leida.teta_ref, 0);
-            }
 
 
             // ------------------VREF_IZQ_DER----------------
-            if (true) { // FALSE SI NO QUIERES USARLO
             xQueueSend(ColaUsoVREFIzq, &data_leida.v_izq_ref, 0);
             xQueueSend(ColaUsoVREFDer, &data_leida.v_der_ref, 0);
-            }
+
             // ------------------V_TOTAL_REF----------------
-            if (true) { // FALSE SI NO QUIERES USARLO
-                xQueueSend(ColaUsoVREFTotal, &data_leida.v_total_ref, 0);
-            }
+            
 
             // ------------------X_REF_Y_REF----------------
-            if (true) { // FALSE SI NO QUIERES USARLO
-                PosicionRef pos = {data_leida.x_ref, data_leida.y_ref};
-                xQueueSend(ColaUsoPosicionRef, &pos, portMAX_DELAY);
-
-            }
+    
 
             // LIMPIEZA
             while (Serial.available() > 0) {Serial.read();}}// Descartamos el byte
