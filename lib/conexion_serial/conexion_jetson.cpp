@@ -28,7 +28,12 @@ void setup_jetson() {
   }
   Serial.println("Serial Jetson listo");
   delay(1000); // Pequeña pausa para asegurar que el mensaje se envíe antes de continuar
+  if (Serial.available() != 0){
+    //llego un error, vuelvo a mandar la wea
+    Serial.println("Serial Jetson listo");
 
+
+  } 
 }
 
 
