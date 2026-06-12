@@ -50,6 +50,9 @@ QueueHandle_t ColaLecturaTeta;
 //teta ref
 QueueHandle_t ColaUsoTetaRef;
 QueueHandle_t ColaLecturaTetaRef;
+//velocidad angular
+QueueHandle_t ColaUsoVelAng;
+QueueHandle_t ColaLecturaVelAng;
 //---------------------COLAS POSICION---------------------
 //posicion medida  (Puedo ponerle 2 objetos a la queue)
 QueueHandle_t ColaUsoPosicion;
@@ -60,6 +63,12 @@ QueueHandle_t ColaLecturaPosicionRef;
 
 
 
+
+float wrap180(float ang) {
+  while (ang >   180.0f) ang -= 360.0f;
+  while (ang <= -180.0f) ang += 360.0f;
+  return ang;
+}
 
 // ---------ESTRUCTURA DE TELEMETRIA -----------
 
@@ -282,14 +291,84 @@ void pidMotorDerTask(void *pvparameters){
 }
 
 // --------------- CONTROL DE ANGULO ------------------
+// PID
 void pidControlDireccionAngularTask(void *pvParameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    float velocidad_nueva = 0;
+    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_CONTROL_ANGULO);
 
-    for(;;){
+    // VARIABLES PID
+    float teta_actual = 0.0f;  // entrada del PID (medida "desenrollada")
+    float teta_ref    = 0.0f;  // referencia
+    float v_diff      = 0.0f;  // salida: diferencial de velocidad [m/s]
 
+    // SETEO EL PID
+    QuickPID pidAngulo(
+        &teta_actual, &v_diff, &teta_ref,
+        Kp_ang, Ki_ang, Kd_ang,
+        QuickPID::pMode::pOnError,
+        QuickPID::dMode::dOnMeas,
+        QuickPID::iAwMode::iAwCondition,
+        QuickPID::Action::direct
+    );
+
+    // PARAMETROS
+    pidAngulo.SetOutputLimits(-VEL_GIRO_MAX, VEL_GIRO_MAX);
+    pidAngulo.SetSampleTimeUs(FRECUENCIA_CONTROL_ANGULO * 1000);
+    pidAngulo.SetMode(QuickPID::Control::timer);
+
+    float teta_med = 0.0f;
+    float v_avance = 0.0f;   // velocidad de avance comun (rutina/secuenciador)
+
+    // LOOP
+    for (;;){
+        // LEO REFERENCIA, MEDIDA Y VELOCIDAD DE AVANCE
+        xQueuePeek(ColaUsoTetaRef,   &teta_ref, 0);
+        xQueuePeek(ColaUsoTeta,      &teta_med, 0);
+
+        // "Desenrollamos" la medida alrededor de la referencia para que el PID
+        // vea el error mas corto en (-180,180] sin saltos en el wrap.
+        float error = wrap180(teta_ref - teta_med);
+        teta_actual = teta_ref - error;  // => (teta_ref - teta_actual) = error
+
+        pidAngulo.Compute();
+
+        // Modelo uniciclo: velocidad de avance comun + correccion diferencial.
+        // Convencion horario+: para girar horario (error>0) la rueda izquierda
+        // va mas rapido que la derecha.
+        float v_angular = v_avance + v_diff;   // Aca lo cambie a v_angular, en otro lado se transforma a velocidad de cada rueda.
+
+
+        // ENVIO a los PID de velocidad (lazo interno de la cascada)
+        xQueueSend(ColaUsoVelAng, &v_angular, 0);   //  envia a v angular
+        // DELAY
+        vTaskDelayUntil(&xLastWakeTime, xfrec);
     }
 }
+
+//Conversor V_total y V_angular a V_der V_izq
+void asignacionVelocidadRuedas(void *pvParameters){
+TickType_t xLastWakeTime = xTaskGetTickCount();
+for (;;){
+
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    float velocidad_total = 0;
+    float velocidad_angular_nueva = 0;
+    float v_der_out = 0;
+    float v_izq_out = 0;
+    for (;;){
+        if (xQueueReceive(ColaUsoVelAng, &velocidad_angular_nueva, portMAX_DELAY) == pdTRUE || xQueueReceive( ColaUsoVREFTotal, &velocidad_total, portMAX_DELAY) == pdTRUE){
+        //uso la formula
+        v_izq_out = (2* velocidad_total - velocidad_angular_nueva * LARGO_ENTRE_RUEDAS) / RADIO_DE_RUEDA;
+        v_der_out = velocidad_total * (2/RADIO_DE_RUEDA) - v_izq_out;
+        //ENVIO
+        xQueueSend(ColaUsoVREFIzq, &v_izq_out, 0);
+        xQueueSend(ColaUsoVREFDer, &v_der_out, 0);
+            }
+        }
+    }
+}
+
+
 
 //--------------- CONTROL DE POSCICION -----------------
 void pidControlPosicionTask(void *pvParameters){
