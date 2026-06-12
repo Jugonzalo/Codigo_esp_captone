@@ -284,26 +284,19 @@ void pidMotorDerTask(void *pvparameters){
 // --------------- CONTROL DE ANGULO ------------------
 void pidControlDireccionAngularTask(void *pvParameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
-
+    float velocidad_nueva = 0;
 
     for(;;){
-        if (xQueueReceive(ColaUsoDutyteta, &velocidad_nueva, portMAX_DELAY) == pdTRUE){
-            // -- LENAR --
 
-
-        }
     }
 }
 
 //--------------- CONTROL DE POSCICION -----------------
 void pidControlPosicionTask(void *pvParameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
+    float velocidad_nueva = 0;
     for (;;){
-        if (xQueueReceive(ColaPosicion, &velocidad_nueva, portMAX_DELAY) == pdTRUE){
-            // ---- LENAR ----
-
-
-        }
+    // -- LLENAR --
     }
 }
 
