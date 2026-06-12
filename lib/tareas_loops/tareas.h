@@ -5,8 +5,8 @@
 
 
 #define FRECUENCIA_MOTORES 1 // en MiliSeg, segun el andres hay cuello de botella
-#define FRECUENCIA_LECTURA 500    //
-#define FRECUENCIA_ENVIO 500
+#define FRECUENCIA_LECTURA 20   //
+#define FRECUENCIA_ENVIO 20
 #define FRECUENCIA_IMU 10
 #define FRECUENCIA_ENCODER 10
 #define FRECUENCIA_CONTROL_ANGULO 10
