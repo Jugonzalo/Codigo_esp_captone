@@ -40,25 +40,28 @@ extern ESP32Encoder encoderDer;
 
 
 
-// ===== CARACTERIZACIÓN EN m/s (Y = mX + b) =====
+// ===== CARACTERIZACIÓN EN cm/s (Y = mX + b) =====
+// (reescalada x100 desde la caracterizacion original en m/s)
 // Motor 1 (Izquierdo)
-const float M1_m = 0.00709362;
-const float M1_b = -0.4760306;
+const float M1_m = 0.709362;
+const float M1_b = -47.60306;
 const int M1_MIN_DUTY = 130;
 
 // Motor 2 (Derecho)
-const float M2_m = 0.0085289;
-const float M2_b = -0.9035745;
+const float M2_m = 0.85289;
+const float M2_b = -90.35745;
 const int M2_MIN_DUTY = 135;
 
 const int MAX_DUTY = 245;
 
 // ===== PARÁMETROS MECÁNICOS =====
-// METROS_POR_PULSO = (2 * PI * Radio_Rueda) / (Pulsos_Por_Revolucion_Del_Eje)
-const float METROS_POR_PULSO = 0.0001; 
+// CM_POR_PULSO = (2 * PI * Radio_Rueda) / (Pulsos_Por_Revolucion_Del_Eje)
+// (placeholder: =METROS_POR_PULSO*100, calibrar fisicamente)
+const float METROS_POR_PULSO = 0.0001;
+const float CM_POR_PULSO = 0.01;
 
 // ===== PARÁMETROS DE CONTROL =====
-const float ACCEL_MAX = 0.5; // m/s² para el Soft Start
+const float ACCEL_MAX = 50.0; // cm/s² para el Soft Start
 
 // Usamos float para aprovechar la FPU nativa de la ESP32
 const float Kp = 200.0, Ki = 200.0, Kd = 1.0; 
