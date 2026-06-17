@@ -22,7 +22,7 @@ void loop_sensores();
 struct DatosImu {
   float omega_dps;   // velocidad angular Z (con signo de la convencion) [grados/s]
   float yaw_deg;     // angulo integrado [grados, (-180,180], horario+]
-  float accel_x;     // aceleracion lineal de avance (eje X) sin bias [m/s^2]
+  float accel_x;     // aceleracion lineal de avance (eje X) sin bias [cm/s^2]
 };
 
 
