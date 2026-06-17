@@ -1,21 +1,9 @@
 #include "../lib/Debug_mode.h"
-#include "../lib/firebase_datos/firebase_datos.h"
-#include "../lib/firebase_manager/firebase_manager.h"
 #include "../lib/motor/motor.h"
 #include "../lib/conexion_serial/conexion_jetson.h"
 #include "../lib/sensores/Sensores.h"
 #include "../lib/tareas_loops/tareas.h"
 #include <Arduino.h>
-
-struct __attribute__((packed)) Envio {
-  uint8_t header = 0xAA; // Byte de inicio para sincronizar
-  int32_t velocidad_izquierda;      // un por ahora dejemoslo como
-  int32_t velocidad_derecha;        // un byte
-
-  uint8_t checksum;      // Para validar integridad
-};
-
-
 
 
 void setup() {
@@ -25,13 +13,12 @@ void setup() {
 
 
   motorSetup();    // Inicializa motores y canales PWM
-  //firebaseSetup(); // Conecta WiFi e inicializa Firebase
-  setup_jetson();   // Configura la comunicación serial con Jetson
-  //setup_sensores(); // Configura los sensores
+  setup_jetson();  // Configura la comunicación serial con Jetson
+  setup_imu();     // Inicializa y calibra la IMU (robot inmóvil durante esto)
 
 
   setup_rtos(); // inicia todas las task
-} 
+}
 
 // =============================================================================
 //  LOOP
