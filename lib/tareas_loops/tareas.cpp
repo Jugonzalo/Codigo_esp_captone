@@ -318,7 +318,8 @@ void pidControlDireccionAngularTask(void *pvParameters){
 
     float teta_med = 0.0f;
     float v_avance = 0.0f;   // velocidad de avance comun (rutina/secuenciador)
-
+    float v_angular = 0.0f;
+    float error = 0.0f;
     // LOOP
     for (;;){
         // LEO REFERENCIA, MEDIDA Y VELOCIDAD DE AVANCE
@@ -327,7 +328,7 @@ void pidControlDireccionAngularTask(void *pvParameters){
 
         // "Desenrollamos" la medida alrededor de la referencia para que el PID
         // vea el error mas corto en (-180,180] sin saltos en el wrap.
-        float error = wrap180(teta_ref - teta_med);
+        error = wrap180(teta_ref - teta_med);
         teta_actual = teta_ref - error;  // => (teta_ref - teta_actual) = error
 
         pidAngulo.Compute();
@@ -335,38 +336,40 @@ void pidControlDireccionAngularTask(void *pvParameters){
         // Modelo uniciclo: velocidad de avance comun + correccion diferencial.
         // Convencion horario+: para girar horario (error>0) la rueda izquierda
         // va mas rapido que la derecha.
-        float v_angular = v_avance + v_diff;   // Aca lo cambie a v_angular, en otro lado se transforma a velocidad de cada rueda.
-
+        v_angular = v_avance + v_diff;   // Aca lo cambie a v_angular, en otro lado se transforma a velocidad de cada rueda.;
 
         // ENVIO a los PID de velocidad (lazo interno de la cascada)
         xQueueSend(ColaUsoVelAng, &v_angular, 0);   //  envia a v angular
+        xQueueSend(ColaLecturaVelAng, &v_angular,0);
         // DELAY
         vTaskDelayUntil(&xLastWakeTime, xfrec);
     }
 }
 
 //Conversor V_total y V_angular a V_der V_izq
-void asignacionVelocidadRuedas(void *pvParameters){
-TickType_t xLastWakeTime = xTaskGetTickCount();
-for (;;){
-
+void asignacionVelocidadRuedasTask(void *pvParameters) {
+    const TickType_t xfrec = pdMS_TO_TICKS(1000); // define tu frecuencia
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    float velocidad_total = 0;
-    float velocidad_angular_nueva = 0;
-    float v_der_out = 0;
-    float v_izq_out = 0;
-    for (;;){
-        if (xQueueReceive(ColaUsoVelAng, &velocidad_angular_nueva, portMAX_DELAY) == pdTRUE || xQueueReceive( ColaUsoVREFTotal, &velocidad_total, portMAX_DELAY) == pdTRUE){
-        //uso la formula
-        v_izq_out = (2* velocidad_total - velocidad_angular_nueva * LARGO_ENTRE_RUEDAS) / RADIO_DE_RUEDA;
-        v_der_out = velocidad_total * (2/RADIO_DE_RUEDA) - v_izq_out;
-        //ENVIO
+    float velocidad_total = 0.0f;
+    float velocidad_angular_nueva = 0.0f;
+    float v_der_out = 0.0f;
+    float v_izq_out = 0.0f;
+
+    for (;;) {
+
+        xQueueReceive(ColaUsoVelAng, &velocidad_angular_nueva, 0);
+        xQueueReceive(ColaUsoVREFTotal, &velocidad_total, 0);
+
+        v_izq_out = (2* velocidad_total - 0 * LARGO_ENTRE_RUEDAS) / (2 * RADIO_DE_RUEDA);
+        v_der_out =  velocidad_total * (2/RADIO_DE_RUEDA) - v_izq_out;
+
         xQueueSend(ColaUsoVREFIzq, &v_izq_out, 0);
         xQueueSend(ColaUsoVREFDer, &v_der_out, 0);
-            }
+        xQueueOverwrite(ColaLecturaVREFIzq, &v_izq_out);
+        xQueueOverwrite(ColaLecturaVREFDer, &v_der_out);
         }
     }
-}
+
 
 
 
@@ -476,7 +479,12 @@ void enviarJetsonTask(void *pvParameters){
         //-----------------------V_IZQ V_DER ACTUAL-----------------------
         //IZQ
         xQueuePeek(ColaLectorVelIzq, &data.v_izq, 0);
+        //der
         xQueuePeek(ColaLectorVelDer, &data.v_der, 0);
+        //-----------------------V_IZQ V_DER REF-----------------------
+
+        xQueuePeek(ColaLecturaVREFIzq, &data.v_izq_ref, 0);
+        xQueuePeek(ColaLecturaVREFDer, &data.v_der_ref, 0);
 
         //-----------------------V_IZQ V_DER REF  (RAMPA O REF REAL)-----------------------
         //IZQ
@@ -518,21 +526,31 @@ void leerJetsonTaks(void *pvParameters){
             // ------------------------------MANEJO DE COLAS ------------------------------
 
             //------------------DUTY----------------
-            //xQueueSend(ColaUsoDutyIzq, &data_leida.duty_izq ,0);   //COMENTA PARA DESACTIVAR Y QUE SOLO FUNCIONE LA OTRA
-            //XqueueSend(ColaUsoDutyIzq, &data_leida.duty_der ,0); 
+            if (false) { // FALSE SI NO QUIERES USARLO
+            xQueueSend(ColaUsoDutyIzq, &data_leida.duty_izq ,0);   
+            xQueueSend(ColaUsoDutyDer, &data_leida.duty_der ,0); 
+            }
 
             //------------------TETA----------------
+            if (true) {  // FALSE SI NO QUIERES USARLO
+                xQueueSend(ColaUsoTetaRef, &data_leida.teta_ref, 0);
+            }
 
 
             // ------------------VREF_IZQ_DER----------------
+            if (false) { // FALSE SI NO QUIERES USARLO
             xQueueSend(ColaUsoVREFIzq, &data_leida.v_izq_ref, 0);
             xQueueSend(ColaUsoVREFDer, &data_leida.v_der_ref, 0);
+            }
 
             // ------------------V_TOTAL_REF----------------
+            if (true) { // FALSE SI NO QUIERES USARLO
+                xQueueSend(ColaUsoVREFTotal, &data_leida.v_total_ref, 0);
+            }
             
 
             // ------------------X_REF_Y_REF----------------
-    
+
 
             // LIMPIEZA
             while (Serial.available() > 0) {Serial.read();}}// Descartamos el byte
@@ -578,6 +596,20 @@ void setup_rtos() {
     //DERECHO
      ColaUsoVREFDer  = xQueueCreate(1, sizeof(float));
      ColaLecturaVREFDer = xQueueCreate(1, sizeof(float));
+    //---------------------COLAS V_total_Ref y Teta_ref---------------------
+    //V_total
+    ColaUsoVREFTotal = xQueueCreate(1, sizeof(float));
+    ColaLecturaVREFTotal= xQueueCreate(1, sizeof(float));
+    //Teta_ref
+    ColaUsoTetaRef = xQueueCreate(1, sizeof(float));
+    ColaLecturaTetaRef = xQueueCreate(1, sizeof(float));
+    // ------------------ Colas medidas angulares ------------
+    // teta medido
+    ColaUsoTeta = xQueueCreate(1, sizeof(float));
+    ColaLecturaTeta= xQueueCreate(1, sizeof(float));
+    //vel angular
+    ColaUsoVelAng = xQueueCreate(1, sizeof(float));
+    ColaLecturaVelAng= xQueueCreate(1, sizeof(float));
 
 
     // USO MOTORES
@@ -614,11 +646,19 @@ void setup_rtos() {
 
     // CONTROLADOR
     //xTaskCreatePinnedToCore(pasar_rampa_izq_task,  "rampaizq",4096,  NULL, 3, NULL, 1);   ESTA DANDO MUCHOS PROBELMAS LA RAMPA, LA bypaseare
+    //MOTOR
     xTaskCreatePinnedToCore(pidMotorIzqTask,  "pidizq",4096,  NULL, 8, NULL, 1);
     xTaskCreatePinnedToCore(pidMotorDerTask,  "pidder",4096,  NULL, 8, NULL, 1);
+
+    //ANGULO
+    //Pid
+    xTaskCreatePinnedToCore(pidControlDireccionAngularTask,  "pid_ang",4096,  NULL, 8, NULL, 1);
+    //conversor
+    xTaskCreatePinnedToCore(asignacionVelocidadRuedasTask,  "Conversor",4096,  NULL, 8, NULL, 1);
 
     //ENCODER
     xTaskCreatePinnedToCore(lecturaEncoderIzqTask,  "encizq",4096,  NULL, 7, NULL, 1);
     xTaskCreatePinnedToCore(lecturaEncoderDerTask,  "encder",4096,  NULL, 7, NULL, 1);
+
 
 }
