@@ -62,6 +62,8 @@ const int   RUTINA_SETTLE_N   = 8;     // ciclos seguidos dentro de tolerancia (
 // Diferencial maximo de velocidad de rueda que puede pedir el control [m/s]
 
 
+extern ESP32Encoder encoderDer;
+extern ESP32Encoder encoderIzq;
 
 
 // Constantes 

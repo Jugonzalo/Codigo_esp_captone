@@ -2,6 +2,7 @@
 #include "../Debug_mode.h"
 #include "esp32-hal-gpio.h"
 #include <Arduino.h>
+#include <ESP32Encoder.h>
 
 // Definición real de los booleanos de dirección (declarados en motor.h con
 // extern)
@@ -275,12 +276,7 @@ void motorSetup() {
   cambiar_velocidad_derecha(0);
 
 
-  // ENCODERS
-  ESP32Encoder::useInternalWeakPullResistors = puType::up;
-  encoderIzq.attachFullQuad(pinB1, pinA1);;
-  encoderIzq.clearCount();
-  encoderDer.attachFullQuad(pinA2, pinB2);
-  encoderDer.clearCount();
+
 
  
 

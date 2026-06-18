@@ -7,6 +7,8 @@
 #include "../Debug_mode.h"
 #include <string.h>
 
+ESP32Encoder encoderDer;
+ESP32Encoder encoderIzq;
 
 // ------------------COLAS------------------------
 
@@ -69,6 +71,7 @@ QueueHandle_t ColaUsoImu;
 
 //---------------------COLA RESET DE POSE (Jetson / ArUco)---------------------
 QueueHandle_t ColaResetPose;
+
 
 // wrap180() ahora vive en el modulo estimador (lib/Estimador). Se usa desde aca
 // via #include <estimador.h> para no duplicar el simbolo al enlazar.
@@ -783,11 +786,20 @@ void setup_rtos() {
     ColaUsoImu    = xQueueCreate(1, sizeof(DatosImu));
     ColaResetPose = xQueueCreate(1, sizeof(PoseReset));
 
+
+
     // Inicializamos v_total en 0 para que los peek tengan valor valido
     { float _v0 = 0.0f; xQueueOverwrite(ColaUsoVREFTotal, &_v0); }
 
 
 
+   // ENCODERS
+    ESP32Encoder::useInternalWeakPullResistors = puType::up;
+
+    encoderIzq.attachFullQuad(pinB1, pinA1);
+    encoderIzq.clearCount();
+    encoderDer.attachFullQuad(pinA2, pinB2);
+    encoderDer.clearCount();
 
 
     // USO MOTORES
