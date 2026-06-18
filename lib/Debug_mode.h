@@ -5,9 +5,9 @@
 // DEBUG 1 + TEST_ESTIMADOR 1: log de texto por serial y SIN envio binario a la
 // Jetson (no se pueden mezclar). RUTINA_CUADRADO 1: ejecuta el cuadrado al
 // encender. Para produccion con la Jetson: DEBUG 0, TEST_ESTIMADOR 0.
-#define DEBUG 1
-#define TEST_ESTIMADOR 1
-#define RUTINA_CUADRADO 1
+#define DEBUG 0
+#define TEST_ESTIMADOR 0
+#define RUTINA_CUADRADO 0
 
 #if DEBUG
 // Para strings simples o valores: DEBUG_PRINTLN("hola") / DEBUG_PRINTLN(var)

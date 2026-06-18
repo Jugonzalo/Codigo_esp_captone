@@ -411,15 +411,11 @@ void lecturaEncoderIzqTask(void *pvparaameters){
     float velocidad_leida = 0; 
     int ticks;
     // CREO EL OBJETO
-
-    ESP32Encoder encoder;
-    ESP32Encoder::useInternalWeakPullResistors = puType::up; // <-- CORRECCIÓN: puType::up en minúsculas
-    encoder.attachFullQuad(pinB1, pinA1);  // cambia los pines pal derecho
-    encoder.clearCount();
+    encoderIzq.clearCount();
     // LOOP
     for (;;){
-        ticks = encoder.getCount();
-        encoder.clearCount();
+        ticks = encoderIzq.getCount();
+        encoderIzq.clearCount();
         velocidad_leida = ticks * CM_POR_PULSO * 1000.0 / FRECUENCIA_ENCODER; // cm/s
         
         //ENVIAR
@@ -437,15 +433,11 @@ void lecturaEncoderDerTask(void *pvparaameters){
     float velocidad_leida = 0; 
     int ticks;
     // CREO EL OBJETO
-
-    ESP32Encoder encoder;
-    ESP32Encoder::useInternalWeakPullResistors = puType::up; // <-- CORRECCIÓN: puType::up en minúsculas
-    encoder.attachFullQuad(pinB2, pinA2);
-    encoder.clearCount();
+    encoderDer.clearCount();
     // LOOP
     for (;;){
-        ticks = encoder.getCount();
-        encoder.clearCount();
+        ticks = encoderDer.getCount();
+        encoderDer.clearCount();
         velocidad_leida = ticks * CM_POR_PULSO * 1000.0 / FRECUENCIA_ENCODER; // cm/s
         
         //ENVIAR
@@ -492,6 +484,8 @@ void estimadorDePoscicionTask(void *pvParameters){
     float v_izq = 0.0f, v_der = 0.0f;   // cm/s (los publican los encoders)
     PoseReset reset;
     TickType_t t_prev = xTaskGetTickCount();
+    float dt = 0.0f;
+    float teta = 0.0f;
 
     for (;;){
         // 0. Reset de pose si la Jetson/ArUco lo solicito
@@ -506,14 +500,14 @@ void estimadorDePoscicionTask(void *pvParameters){
 
         // 2. dt real de la tarea
         TickType_t ahora = xTaskGetTickCount();
-        float dt = (float)(ahora - t_prev) * portTICK_PERIOD_MS / 1000.0f;
+        dt = (float)(ahora - t_prev) * portTICK_PERIOD_MS / 1000.0f;
         t_prev = ahora;
 
         // 3. Estimacion consolidada (cm, cm/s, grados)
         estimador_update(est, v_izq, v_der, imu.yaw_deg, imu.accel_x, dt);
 
         // 4. Publicar heading y posicion
-        float teta = est.teta;
+        teta = est.teta;
         xQueueOverwrite(ColaUsoTeta,     &teta);   // para el control de angulo
         xQueueOverwrite(ColaLecturaTeta, &teta);   // telemetria
 
@@ -628,6 +622,7 @@ void enviarJetsonTask(void *pvParameters){
     Envio data;
     memset(&data, 0, sizeof(data)); //inicio todos en 0
     data.header = 0xAA;  // asigno el header
+    Posicion _pos = {0, 0};
  
     for (;;){
 
@@ -658,7 +653,6 @@ void enviarJetsonTask(void *pvParameters){
         //-----------------------VTOTAL REF-----------------------
 
         //-----------------------X Y ESTIMADO-----------------------
-        Posicion _pos = {0, 0};
         if (xQueuePeek(ColaLecturaPosicion, &_pos, 0) == pdTRUE){
             data.x_pos = _pos.x;
             data.y_pos = _pos.y;
@@ -793,22 +787,25 @@ void setup_rtos() {
     { float _v0 = 0.0f; xQueueOverwrite(ColaUsoVREFTotal, &_v0); }
 
 
+
+
+
     // USO MOTORES
     xTaskCreatePinnedToCore(
         motorDerechoSwitchTask, //funcion
         "motordtask", //nombre
-        4096, //habra que analizarlo
+        2048, //habra que analizarlo
         NULL, //parametros
-        5, // Prioridad analizar
+        10, // Prioridad analizar
         NULL, //handel
         1 //core
     );
     xTaskCreatePinnedToCore(
         motorizquierdoSwitchTask, //funcion
         "motoritask", //nombre
-        4096, //habra que analizarlo
+        2048, //habra que analizarlo
         NULL, //parametros
-        5, // Prioridadanalizar
+        10, // Prioridadanalizar
         NULL, //handel
         1 //core
     );
@@ -826,7 +823,7 @@ void setup_rtos() {
        NULL, //handel
      0 //core
     );
-    xTaskCreatePinnedToCore(leerJetsonTaks,  "leerdatos", 4096,  NULL, 5, NULL, 0);
+    xTaskCreatePinnedToCore(leerJetsonTaks,  "leerdatos", 2048,  NULL,4 , NULL, 0);
 #endif
 
     // CONTROLADOR
@@ -837,13 +834,13 @@ void setup_rtos() {
 
     //ANGULO
     //Pid
-    xTaskCreatePinnedToCore(pidControlDireccionAngularTask,  "pid_ang",4096,  NULL, 8, NULL, 1);
+    xTaskCreatePinnedToCore(pidControlDireccionAngularTask,  "pid_ang",4096,  NULL, 6, NULL, 1);
     //conversor
-    xTaskCreatePinnedToCore(asignacionVelocidadRuedasTask,  "Conversor",4096,  NULL, 8, NULL, 1);
+    xTaskCreatePinnedToCore(asignacionVelocidadRuedasTask,  "Conversor",4096,  NULL, 5, NULL, 1);
 
     //ENCODER
-    xTaskCreatePinnedToCore(lecturaEncoderIzqTask,  "encizq",4096,  NULL, 7, NULL, 1);
-    xTaskCreatePinnedToCore(lecturaEncoderDerTask,  "encder",4096,  NULL, 7, NULL, 1);
+    xTaskCreatePinnedToCore(lecturaEncoderIzqTask,  "encizq",3072,  NULL, 7, NULL, 1);
+    xTaskCreatePinnedToCore(lecturaEncoderDerTask,  "encder",3072,  NULL, 7, NULL, 1);
 
     //IMU + ESTIMADOR DE POSICION
     xTaskCreatePinnedToCore(lecturaImuTask,          "imu",       4096, NULL, 6, NULL, 1);

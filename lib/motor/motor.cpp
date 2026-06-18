@@ -274,6 +274,14 @@ void motorSetup() {
   cambiar_velocidad_izquierda(0);
   cambiar_velocidad_derecha(0);
 
+
+  // ENCODERS
+  ESP32Encoder::useInternalWeakPullResistors = puType::up;
+  encoderIzq.attachFullQuad(pinB1, pinA1);;
+  encoderIzq.clearCount();
+  encoderDer.attachFullQuad(pinA2, pinB2);
+  encoderDer.clearCount();
+
  
 
 
