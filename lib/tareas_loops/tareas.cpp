@@ -62,7 +62,8 @@ QueueHandle_t ColaUsoPosicionRef;
 QueueHandle_t ColaLecturaPosicionRef;
 
 
-
+ESP32Encoder encoderDer;
+ESP32Encoder encoderIzq;
 
 float wrap180(float ang) {
   while (ang >   180.0f) ang -= 360.0f;
@@ -98,9 +99,9 @@ struct __attribute__((packed)) Lectura {
   float teta_ref;
   float v_der_ref;
   float v_izq_ref;
-  int32_t v_total_ref;
-  int32_t x_ref;
-  int32_t y_ref;  // hasta aca parecen haber 57 bytes
+  float v_total_ref;
+  float x_ref;
+  float y_ref;  // hasta aca parecen haber 57 bytes
 
 };
 /// ---------------------MIS FUNCIONES ------------------------
@@ -121,6 +122,7 @@ void motorDerechoSwitchTask(void *pvParameters){
         //if (!subiendo && velocidad_nueva > -255){velocidad_nueva -= 1;}else if (!subiendo  && velocidad_nueva == -255){subiendo = true;}cambiar_velocidad_derecha(velocidad_nueva);
         if (xQueueReceive(ColaUsoDutyDer, &velocidad_nueva, portMAX_DELAY) == pdTRUE){
             cambiar_velocidad_derecha(velocidad_nueva);
+            xQueueSend(ColaLectorDutyDer, &velocidad_nueva,0);
         }
     }
 }
@@ -132,6 +134,7 @@ void motorizquierdoSwitchTask(void *pvParameters){
     for(;;){
         if (xQueueReceive(ColaUsoDutyIzq, &velocidad_nueva, portMAX_DELAY) == pdTRUE) {
             cambiar_velocidad_izquierda(velocidad_nueva);
+            xQueueSend(ColaLectorDutyIzq, &velocidad_nueva,0);
         }
     }
 }
@@ -187,7 +190,7 @@ void pidMotorIzqTask(void *pvparameters){
     //SETEO EL PID
     QuickPID pid(
     &abs_velocidad_actual, &v_out, &abs_velocidad_ref,   // les puse el absoluto de una
-    Kp, Ki, Kd, 
+    Kp_motor_izquierdo, Ki_motor_izquierdo, Kd_motor_izquierdo, 
     QuickPID::pMode::pOnError, 
     QuickPID::dMode::dOnMeas, 
     QuickPID::iAwMode::iAwCondition, // <-- CORRECCIÓN: Modo Anti-Windup añadido
@@ -224,11 +227,9 @@ void pidMotorIzqTask(void *pvparameters){
         xQueueSend(ColaUsoDutyIzq, &duty, 0); //este va aca porque se activa con la cola el otro 
         xQueueOverwrite(ColaLectorDutyIzq, &duty); // para que el envio a jetson tenga la ultima wea
 
-
-        //ENVIO
    
     // DELAY
-    vTaskDelayUntil(&xLastWakeTime, xfrec); 
+        vTaskDelayUntil(&xLastWakeTime, xfrec); 
     }
 }
 void pidMotorDerTask(void *pvparameters){
@@ -248,7 +249,7 @@ void pidMotorDerTask(void *pvparameters){
     //SETEO EL PID
     QuickPID pid(
     &abs_velocidad_actual, &v_out, &abs_velocidad_ref,   // les puse el absoluto de una
-    Kp, Ki, Kd, 
+    Kp_motor_derecho, Ki_motor_derecho, Kd_motor_derecho,
     QuickPID::pMode::pOnError, 
     QuickPID::dMode::dOnMeas, 
     QuickPID::iAwMode::iAwCondition, // <-- CORRECCIÓN: Modo Anti-Windup añadido
@@ -286,7 +287,7 @@ void pidMotorDerTask(void *pvparameters){
         xQueueOverwrite(ColaLectorDutyDer, &duty); // para que el envio a jetson tenga la ultima wea
 
     // DELAY
-    vTaskDelayUntil(&xLastWakeTime, xfrec); 
+       vTaskDelayUntil(&xLastWakeTime, xfrec); 
     }
 }
 
@@ -348,7 +349,7 @@ void pidControlDireccionAngularTask(void *pvParameters){
 
 //Conversor V_total y V_angular a V_der V_izq
 void asignacionVelocidadRuedasTask(void *pvParameters) {
-    const TickType_t xfrec = pdMS_TO_TICKS(1000); // define tu frecuencia
+    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_CONTROL_ANGULO); // define tu frecuencia
     TickType_t xLastWakeTime = xTaskGetTickCount();
     float velocidad_total = 0.0f;
     float velocidad_angular_nueva = 0.0f;
@@ -367,11 +368,9 @@ void asignacionVelocidadRuedasTask(void *pvParameters) {
         xQueueSend(ColaUsoVREFDer, &v_der_out, 0);
         xQueueOverwrite(ColaLecturaVREFIzq, &v_izq_out);
         xQueueOverwrite(ColaLecturaVREFDer, &v_der_out);
+        vTaskDelayUntil(&xLastWakeTime, xfrec); 
         }
     }
-
-
-
 
 //--------------- CONTROL DE POSCICION -----------------
 void pidControlPosicionTask(void *pvParameters){
@@ -382,25 +381,22 @@ void pidControlPosicionTask(void *pvParameters){
     }
 }
 
-// -----------------LECTURA DE SENSORES ----------------
+// -----------------LECTURA DE SENSORES----------------
 //ENCODERS
 void lecturaEncoderIzqTask(void *pvparaameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_ENCODER);      
 
     float velocidad_leida = 0; 
-    int ticks;
     // CREO EL OBJETO
-
-    ESP32Encoder encoder;
-    ESP32Encoder::useInternalWeakPullResistors = puType::up; // <-- CORRECCIÓN: puType::up en minúsculas
-    encoder.attachFullQuad(pinB1, pinA1);  // cambia los pines pal derecho
-    encoder.clearCount();
+    int64_t count_anterior = 0;  // ← añadir
     // LOOP
     for (;;){
-        ticks = encoder.getCount();
-        encoder.clearCount();
-        velocidad_leida = ticks * METROS_POR_PULSO * 1000.0 / FRECUENCIA_ENCODER;
+
+        int64_t count_actual = encoderIzq.getCount();          // ← cambio
+        int ticks = (int)(count_actual - count_anterior);   // ← cambio
+        count_anterior = count_actual; 
+        velocidad_leida =  ticks * CM_POR_PULSO * 1000.0f / FRECUENCIA_ENCODER;
         
         //ENVIAR
         xQueueOverwrite(ColaLectorVelIzq, &velocidad_leida);  // para la lectura
@@ -414,19 +410,16 @@ void lecturaEncoderDerTask(void *pvparaameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_ENCODER);      
 
-    float velocidad_leida = 0; 
+    float velocidad_leida = 0.0f; 
     int ticks;
-    // CREO EL OBJETO
-
-    ESP32Encoder encoder;
-    ESP32Encoder::useInternalWeakPullResistors = puType::up; // <-- CORRECCIÓN: puType::up en minúsculas
-    encoder.attachFullQuad(pinB2, pinA2); 
-    encoder.clearCount();
+    int64_t count_anterior = 0.;  // ← añadir
     // LOOP
     for (;;){
-        ticks = encoder.getCount();
-        encoder.clearCount();
-        velocidad_leida = ticks * METROS_POR_PULSO * 1000.0 / FRECUENCIA_ENCODER;
+
+        int64_t count_actual = encoderDer.getCount();          // ← cambio
+        int ticks = (int)(count_actual - count_anterior);   // ← cambio
+        count_anterior = count_actual; 
+        velocidad_leida =  ticks * CM_POR_PULSO * 1000.0f / FRECUENCIA_ENCODER;  // LO DEJARE EN CM/S    (EL LA FRECUENCIA ME LA MANDAN EN ms)
         
         //ENVIAR
         xQueueOverwrite(ColaLectorVelDer, &velocidad_leida);  // para la lectura
@@ -526,13 +519,13 @@ void leerJetsonTaks(void *pvParameters){
             // ------------------------------MANEJO DE COLAS ------------------------------
 
             //------------------DUTY----------------
-            if (false) { // FALSE SI NO QUIERES USARLO
+            if (true) { // FALSE SI NO QUIERES USARLO
             xQueueSend(ColaUsoDutyIzq, &data_leida.duty_izq ,0);   
             xQueueSend(ColaUsoDutyDer, &data_leida.duty_der ,0); 
             }
 
             //------------------TETA----------------
-            if (true) {  // FALSE SI NO QUIERES USARLO
+            if (false) {  // FALSE SI NO QUIERES USARLO
                 xQueueSend(ColaUsoTetaRef, &data_leida.teta_ref, 0);
             }
 
@@ -544,7 +537,7 @@ void leerJetsonTaks(void *pvParameters){
             }
 
             // ------------------V_TOTAL_REF----------------
-            if (true) { // FALSE SI NO QUIERES USARLO
+            if (false) { // FALSE SI NO QUIERES USARLO
                 xQueueSend(ColaUsoVREFTotal, &data_leida.v_total_ref, 0);
             }
             
@@ -612,22 +605,27 @@ void setup_rtos() {
     ColaLecturaVelAng= xQueueCreate(1, sizeof(float));
 
 
+
+
+
+
+
     // USO MOTORES
     xTaskCreatePinnedToCore(
         motorDerechoSwitchTask, //funcion
         "motordtask", //nombre
-        4096, //habra que analizarlo
+        2048, //habra que analizarlo
         NULL, //parametros
-        5, // Prioridad analizar
+        10, // Prioridad analizar
         NULL, //handel
         1 //core
     );
     xTaskCreatePinnedToCore(
         motorizquierdoSwitchTask, //funcion
         "motoritask", //nombre
-        4096, //habra que analizarlo
+        2048, //habra que analizarlo
         NULL, //parametros
-        5, // Prioridadanalizar
+        9, // Prioridadanalizar
         NULL, //handel
         1 //core
     );
@@ -638,27 +636,29 @@ void setup_rtos() {
        "enviodatos", //nombre
         4096, //habra que analizarlo Stack size (Bytes) //creo que esta es la cantidad maxima de data que puede sacar
         NULL, //parametros
-    5, // Prioridadanalizar
+    9, // Prioridadanalizar
        NULL, //handel
      0 //core
     );
-    xTaskCreatePinnedToCore(leerJetsonTaks,  "leerdatos", 4096,  NULL, 5, NULL, 0);
+
+    
+    xTaskCreatePinnedToCore(leerJetsonTaks,  "leerdatos", 2048,  NULL, 4, NULL, 0);
 
     // CONTROLADOR
     //xTaskCreatePinnedToCore(pasar_rampa_izq_task,  "rampaizq",4096,  NULL, 3, NULL, 1);   ESTA DANDO MUCHOS PROBELMAS LA RAMPA, LA bypaseare
     //MOTOR
-    xTaskCreatePinnedToCore(pidMotorIzqTask,  "pidizq",4096,  NULL, 8, NULL, 1);
-    xTaskCreatePinnedToCore(pidMotorDerTask,  "pidder",4096,  NULL, 8, NULL, 1);
+    //xTaskCreatePinnedToCore(pidMotorIzqTask,  "pidizq",4096,  NULL, 5, NULL, 1);
+    //xTaskCreatePinnedToCore(pidMotorDerTask,  "pidder",4096,  NULL, 4, NULL, 1);
 
     //ANGULO
     //Pid
-    xTaskCreatePinnedToCore(pidControlDireccionAngularTask,  "pid_ang",4096,  NULL, 8, NULL, 1);
+    //xTaskCreatePinnedToCore(pidControlDireccionAngularTask,  "pid_ang",4096,  NULL, 6, NULL, 1);
     //conversor
-    xTaskCreatePinnedToCore(asignacionVelocidadRuedasTask,  "Conversor",4096,  NULL, 8, NULL, 1);
+    //xTaskCreatePinnedToCore(asignacionVelocidadRuedasTask,  "Conversor",4096,  NULL, 5, NULL, 1);
 
     //ENCODER
-    xTaskCreatePinnedToCore(lecturaEncoderIzqTask,  "encizq",4096,  NULL, 7, NULL, 1);
-    xTaskCreatePinnedToCore(lecturaEncoderDerTask,  "encder",4096,  NULL, 7, NULL, 1);
+    xTaskCreatePinnedToCore(lecturaEncoderIzqTask,  "encizq",3072,  NULL, 7, NULL, 1);
+    xTaskCreatePinnedToCore(lecturaEncoderDerTask,  "encder",3072,  NULL, 8, NULL, 1);
 
 
 }
