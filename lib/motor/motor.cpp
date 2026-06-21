@@ -12,9 +12,6 @@ bool izq_adelante = true; // true = adelante, false = atrás
 // INICIO EL PID
 
 
-ESP32Encoder encoderIzq;
-ESP32Encoder encoderDer;
-
 
 
 

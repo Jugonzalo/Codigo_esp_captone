@@ -110,7 +110,7 @@ struct __attribute__((packed)) Lectura {
 
 void motorDerechoSwitchTask(void *pvParameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_MOTORES);
+
     int velocidad_nueva = 0;
     bool subiendo = true;
     
@@ -128,7 +128,6 @@ void motorDerechoSwitchTask(void *pvParameters){
 }
 void motorizquierdoSwitchTask(void *pvParameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_MOTORES);
     int velocidad_nueva = 0;
     
     for(;;){
@@ -139,43 +138,10 @@ void motorizquierdoSwitchTask(void *pvParameters){
     }
 }
 //---------------- CONTROL VELOCIDAD----------------
-//Rampas
-void pasar_rampa_izq_task(void *pvParameters){
-
-
-
-
-    float vref = 0;
-    float vRampa = 0;
-    float dt = FRECUENCIA_ENCODER / 1000.0f;
-    for (;;){
-        if (xQueueReceive(ColaUsoVREFIzq, &vref,portMAX_DELAY) == pdTRUE){
-            aplicarRampa(vref, vRampa, dt);
-
-            xQueueOverwrite(ColaLecturaRampaIzq, &vref);
-        }
-    }
-}
-void pasar_rampa_der_task(void *pvParameters){
-
-
-
-
-    float vref = 0;
-    float vRampa = 0;
-    float dt = FRECUENCIA_ENCODER / 1000.0f;
-    for (;;){
-        if (xQueueReceive(ColaUsoVREFDer, &vref,portMAX_DELAY) == pdTRUE){
-            aplicarRampa(vref, vRampa, dt);
-
-            xQueueOverwrite(ColaLecturaRampaDer, &vref);
-        }
-    }
-}
 //PID
 void pidMotorIzqTask(void *pvparameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_MOTORES);
+    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_PID_MOTORES);
 
     // VARIABLES INTERNAS
     float velocidad_actual;
@@ -199,7 +165,7 @@ void pidMotorIzqTask(void *pvparameters){
     
     //PARAMETROS
     pid.SetOutputLimits(LIMITE_NEGATIVO_PID_MOTOR, LIMITE_POSITIVO_PID_MOTOR);
-    pid.SetSampleTimeUs(FRECUENCIA_MOTORES * 1000);  // la frecuencia pal pid      
+    pid.SetSampleTimeUs(FRECUENCIA_PID_MOTORES * 1000);  // la frecuencia pal pid      
     pid.SetMode(QuickPID::Control::timer); 
 
     //LOOP
@@ -234,7 +200,7 @@ void pidMotorIzqTask(void *pvparameters){
 }
 void pidMotorDerTask(void *pvparameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_MOTORES);
+    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_PID_MOTORES);
 
     // VARIABLES INTERNAS
     float velocidad_actual;
@@ -258,7 +224,7 @@ void pidMotorDerTask(void *pvparameters){
     
     //PARAMETROS
     pid.SetOutputLimits(LIMITE_NEGATIVO_PID_MOTOR, LIMITE_POSITIVO_PID_MOTOR);
-    pid.SetSampleTimeUs(FRECUENCIA_MOTORES * 1000);  // la frecuencia pal pid      
+    pid.SetSampleTimeUs(FRECUENCIA_PID_MOTORES * 1000);  // la frecuencia pal pid      
     pid.SetMode(QuickPID::Control::timer); 
 
     //LOOP
@@ -383,47 +349,60 @@ void pidControlPosicionTask(void *pvParameters){
 
 // -----------------LECTURA DE SENSORES----------------
 //ENCODERS
-void lecturaEncoderIzqTask(void *pvparaameters){
+void lecturaEncoders(void *pvparaameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_ENCODER);      
-
-    float velocidad_leida = 0; 
-    // CREO EL OBJETO
-    int64_t count_anterior = 0;  // ← añadir
+    //izquierda
+    float velocidad_leida_izq = 0;
+    float distancia_del_ciclo_izq_filtrada = 0; 
+    float distancia_ciclo_izq_anterior = 0;
+    float distancia_del_ciclo_izq = 0;
+    float aceleracion_izq = 0;
+    //parametro
+    float alpha = 0.2;
+    //derecha
+    float velocidad_leida_der = 0;
+    float distancia_del_ciclo_der_filtrada = 0; 
+    float distancia_ciclo_der_anterior = 0;
+    float distancia_del_ciclo_der = 0;
+    float aceleracion_der = 0;
     // LOOP
     for (;;){
+        // Se cuentan los 2
+        int64_t count_actual_izq = encoderIzq.getCount();      
+        encoderIzq.clearCount();
+        int64_t count_actual_der = encoderDer.getCount();      
+        encoderDer.clearCount();
+        distancia_del_ciclo_izq = count_actual_izq * CM_POR_PULSO;
+        distancia_del_ciclo_izq_filtrada = alpha * distancia_del_ciclo_izq + (1-alpha) * distancia_ciclo_izq_anterior;
+        distancia_ciclo_izq_anterior = distancia_del_ciclo_izq_filtrada;
 
-        int64_t count_actual = encoderIzq.getCount();          // ← cambio
-        int ticks = (int)(count_actual - count_anterior);   // ← cambio
-        count_anterior = count_actual; 
-        velocidad_leida =  ticks * CM_POR_PULSO * 1000.0f / FRECUENCIA_ENCODER;
+        velocidad_leida_izq =  distancia_del_ciclo_izq_filtrada * 1000.0f / FRECUENCIA_ENCODER;  //   cm/s
+        aceleracion_izq = velocidad_leida_izq * 1000.0f / FRECUENCIA_ENCODER;
+
+
+        distancia_del_ciclo_der = count_actual_der * CM_POR_PULSO;
+        distancia_del_ciclo_der_filtrada = alpha * distancia_del_ciclo_der + (1-alpha) * distancia_ciclo_der_anterior;
+        distancia_ciclo_der_anterior = distancia_del_ciclo_der_filtrada;
+
+        velocidad_leida_der =  distancia_del_ciclo_der_filtrada * 1000.0f / FRECUENCIA_ENCODER;  //   cm/s
+        aceleracion_der = velocidad_leida_der * 1000.0f / FRECUENCIA_ENCODER;
+
+        if (abs(distancia_del_ciclo_der_filtrada) < 0.1){distancia_del_ciclo_der_filtrada = 0;}
+
+        if (abs(distancia_del_ciclo_izq_filtrada) < 0.1){distancia_del_ciclo_izq_filtrada = 0;}
+
+
+
+        // Se lee la cuenta
+
         
         //ENVIAR
-        xQueueOverwrite(ColaLectorVelIzq, &velocidad_leida);  // para la lectura
-        xQueueSend(ColaUsoVelIzq, &velocidad_leida, 0);   // para activar el pid
+        xQueueOverwrite(ColaLectorVelIzq, &velocidad_leida_izq);  // para la lectura
+        xQueueSend(ColaUsoVelIzq, &velocidad_leida_izq, 0);   // para activar el pid
 
-        // DELAY
-        vTaskDelayUntil(&xLastWakeTime, xfrec);
-    }
-}
-void lecturaEncoderDerTask(void *pvparaameters){
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_ENCODER);      
-
-    float velocidad_leida = 0.0f; 
-    int ticks;
-    int64_t count_anterior = 0.;  // ← añadir
-    // LOOP
-    for (;;){
-
-        int64_t count_actual = encoderDer.getCount();          // ← cambio
-        int ticks = (int)(count_actual - count_anterior);   // ← cambio
-        count_anterior = count_actual; 
-        velocidad_leida =  ticks * CM_POR_PULSO * 1000.0f / FRECUENCIA_ENCODER;  // LO DEJARE EN CM/S    (EL LA FRECUENCIA ME LA MANDAN EN ms)
-        
-        //ENVIAR
-        xQueueOverwrite(ColaLectorVelDer, &velocidad_leida);  // para la lectura
-        xQueueSend(ColaUsoVelDer, &velocidad_leida, 0);   // para activar el pid
+        xQueueOverwrite(ColaLectorVelDer, &velocidad_leida_der);  // para la lectura
+        xQueueSend(ColaUsoVelDer, &velocidad_leida_der, 0);   // para activar el pid
 
         // DELAY
         vTaskDelayUntil(&xLastWakeTime, xfrec);
@@ -607,6 +586,20 @@ void setup_rtos() {
 
 
 
+    ESP32Encoder::useInternalWeakPullResistors = puType::up;
+    encoderIzq.attachFullQuad(pinB1, pinA1);
+    encoderIzq.setFilter(1023);
+    encoderIzq.clearCount();
+
+
+    ESP32Encoder::useInternalWeakPullResistors = puType::up;
+    encoderDer.attachFullQuad(pinA2, pinB2);
+    encoderDer.setFilter(1023);
+    encoderDer.clearCount();
+
+
+
+
 
 
 
@@ -657,8 +650,84 @@ void setup_rtos() {
     //xTaskCreatePinnedToCore(asignacionVelocidadRuedasTask,  "Conversor",4096,  NULL, 5, NULL, 1);
 
     //ENCODER
-    xTaskCreatePinnedToCore(lecturaEncoderIzqTask,  "encizq",3072,  NULL, 7, NULL, 1);
-    xTaskCreatePinnedToCore(lecturaEncoderDerTask,  "encder",3072,  NULL, 8, NULL, 1);
+    xTaskCreatePinnedToCore(lecturaEncoders,  "encizq",3072,  NULL, 7, NULL, 1);
+    ///xTaskCreatePinnedToCore(lecturaEncoderIzqTask,  "encizq",3072,  NULL, 7, NULL, 1);
+    //xTaskCreatePinnedToCore(lecturaEncoderDerTask,  "encder",3072,  NULL, 8, NULL, 1);
 
 
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//Rampas
+void pasar_rampa_izq_task(void *pvParameters){
+
+
+
+
+    float vref = 0;
+    float vRampa = 0;
+    float dt = FRECUENCIA_ENCODER / 1000.0f;
+    for (;;){
+        if (xQueueReceive(ColaUsoVREFIzq, &vref,portMAX_DELAY) == pdTRUE){
+            aplicarRampa(vref, vRampa, dt);
+
+            xQueueOverwrite(ColaLecturaRampaIzq, &vref);
+        }
+    }
+}
+void pasar_rampa_der_task(void *pvParameters){
+
+
+
+
+    float vref = 0;
+    float vRampa = 0;
+    float dt = FRECUENCIA_ENCODER / 1000.0f;
+    for (;;){
+        if (xQueueReceive(ColaUsoVREFDer, &vref,portMAX_DELAY) == pdTRUE){
+            aplicarRampa(vref, vRampa, dt);
+
+            xQueueOverwrite(ColaLecturaRampaDer, &vref);
+        }
+    }
 }

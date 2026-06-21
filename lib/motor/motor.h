@@ -36,9 +36,6 @@ extern bool izq_adelante; // true = adelante, false = atrás
 #define pinA2 34 // GPIO5 (D1)
 #define pinB2 35 // GPIO4 (D2)
 
-extern ESP32Encoder encoderIzq;
-extern ESP32Encoder encoderDer;
-
 
 
 
