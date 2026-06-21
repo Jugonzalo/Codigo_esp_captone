@@ -2,13 +2,8 @@
 #include <motor.h>
 #include <conexion_jetson.h>
 #include <tareas.h>
-#include <Sensores.h>
-#include <estimador.h>
-#include "../Debug_mode.h"
 #include <string.h>
 
-ESP32Encoder encoderDer;
-ESP32Encoder encoderIzq;
 
 // ------------------COLAS------------------------
 
@@ -66,27 +61,14 @@ QueueHandle_t ColaLecturaPosicion;
 QueueHandle_t ColaUsoPosicionRef;
 QueueHandle_t ColaLecturaPosicionRef;
 
-//---------------------COLA IMU (la publica lecturaImuTask, la consume el estimador)---------------------
-QueueHandle_t ColaUsoImu;
 
-//---------------------COLA RESET DE POSE (Jetson / ArUco)---------------------
-QueueHandle_t ColaResetPose;
+ESP32Encoder encoderDer;
+ESP32Encoder encoderIzq;
 
-
-// wrap180() ahora vive en el modulo estimador (lib/Estimador). Se usa desde aca
-// via #include <estimador.h> para no duplicar el simbolo al enlazar.
-
-// Estructura de posicion estimada [cm]
-struct Posicion { float x; float y; };
-// Estructura de reset de pose absoluta (x,y en cm, teta en grados)
-struct PoseReset { float x; float y; float teta; };
-
-// Punto de entrada publico para corregir la pose estimada con una referencia
-// absoluta (ej. al recibir un ArUco desde la Jetson).
-void solicitarResetPose(float x, float y, float teta) {
-  if (ColaResetPose == NULL) return;
-  PoseReset p = { x, y, teta };
-  xQueueOverwrite(ColaResetPose, &p);
+float wrap180(float ang) {
+  while (ang >   180.0f) ang -= 360.0f;
+  while (ang <= -180.0f) ang += 360.0f;
+  return ang;
 }
 
 // ---------ESTRUCTURA DE TELEMETRIA -----------
@@ -117,9 +99,9 @@ struct __attribute__((packed)) Lectura {
   float teta_ref;
   float v_der_ref;
   float v_izq_ref;
-  int32_t v_total_ref;
-  int32_t x_ref;
-  int32_t y_ref;  // hasta aca parecen haber 57 bytes
+  float v_total_ref;
+  float x_ref;
+  float y_ref;  // hasta aca parecen haber 57 bytes
 
 };
 /// ---------------------MIS FUNCIONES ------------------------
@@ -128,7 +110,7 @@ struct __attribute__((packed)) Lectura {
 
 void motorDerechoSwitchTask(void *pvParameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_MOTORES);
+
     int velocidad_nueva = 0;
     bool subiendo = true;
     
@@ -140,58 +122,26 @@ void motorDerechoSwitchTask(void *pvParameters){
         //if (!subiendo && velocidad_nueva > -255){velocidad_nueva -= 1;}else if (!subiendo  && velocidad_nueva == -255){subiendo = true;}cambiar_velocidad_derecha(velocidad_nueva);
         if (xQueueReceive(ColaUsoDutyDer, &velocidad_nueva, portMAX_DELAY) == pdTRUE){
             cambiar_velocidad_derecha(velocidad_nueva);
+            xQueueSend(ColaLectorDutyDer, &velocidad_nueva,0);
         }
     }
 }
 void motorizquierdoSwitchTask(void *pvParameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_MOTORES);
     int velocidad_nueva = 0;
     
     for(;;){
         if (xQueueReceive(ColaUsoDutyIzq, &velocidad_nueva, portMAX_DELAY) == pdTRUE) {
             cambiar_velocidad_izquierda(velocidad_nueva);
+            xQueueSend(ColaLectorDutyIzq, &velocidad_nueva,0);
         }
     }
 }
 //---------------- CONTROL VELOCIDAD----------------
-//Rampas
-void pasar_rampa_izq_task(void *pvParameters){
-
-
-
-
-    float vref = 0;
-    float vRampa = 0;
-    float dt = FRECUENCIA_ENCODER / 1000.0f;
-    for (;;){
-        if (xQueueReceive(ColaUsoVREFIzq, &vref,portMAX_DELAY) == pdTRUE){
-            aplicarRampa(vref, vRampa, dt);
-
-            xQueueOverwrite(ColaLecturaRampaIzq, &vref);
-        }
-    }
-}
-void pasar_rampa_der_task(void *pvParameters){
-
-
-
-
-    float vref = 0;
-    float vRampa = 0;
-    float dt = FRECUENCIA_ENCODER / 1000.0f;
-    for (;;){
-        if (xQueueReceive(ColaUsoVREFDer, &vref,portMAX_DELAY) == pdTRUE){
-            aplicarRampa(vref, vRampa, dt);
-
-            xQueueOverwrite(ColaLecturaRampaDer, &vref);
-        }
-    }
-}
 //PID
 void pidMotorIzqTask(void *pvparameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_MOTORES);
+    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_PID_MOTORES);
 
     // VARIABLES INTERNAS
     float velocidad_actual;
@@ -206,7 +156,7 @@ void pidMotorIzqTask(void *pvparameters){
     //SETEO EL PID
     QuickPID pid(
     &abs_velocidad_actual, &v_out, &abs_velocidad_ref,   // les puse el absoluto de una
-    Kp, Ki, Kd, 
+    Kp_motor_izquierdo, Ki_motor_izquierdo, Kd_motor_izquierdo, 
     QuickPID::pMode::pOnError, 
     QuickPID::dMode::dOnMeas, 
     QuickPID::iAwMode::iAwCondition, // <-- CORRECCIÓN: Modo Anti-Windup añadido
@@ -215,7 +165,7 @@ void pidMotorIzqTask(void *pvparameters){
     
     //PARAMETROS
     pid.SetOutputLimits(LIMITE_NEGATIVO_PID_MOTOR, LIMITE_POSITIVO_PID_MOTOR);
-    pid.SetSampleTimeUs(FRECUENCIA_MOTORES * 1000);  // la frecuencia pal pid      
+    pid.SetSampleTimeUs(FRECUENCIA_PID_MOTORES * 1000);  // la frecuencia pal pid      
     pid.SetMode(QuickPID::Control::timer); 
 
     //LOOP
@@ -243,16 +193,14 @@ void pidMotorIzqTask(void *pvparameters){
         xQueueSend(ColaUsoDutyIzq, &duty, 0); //este va aca porque se activa con la cola el otro 
         xQueueOverwrite(ColaLectorDutyIzq, &duty); // para que el envio a jetson tenga la ultima wea
 
-
-        //ENVIO
    
     // DELAY
-    vTaskDelayUntil(&xLastWakeTime, xfrec); 
+        vTaskDelayUntil(&xLastWakeTime, xfrec); 
     }
 }
 void pidMotorDerTask(void *pvparameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_MOTORES);
+    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_PID_MOTORES);
 
     // VARIABLES INTERNAS
     float velocidad_actual;
@@ -267,7 +215,7 @@ void pidMotorDerTask(void *pvparameters){
     //SETEO EL PID
     QuickPID pid(
     &abs_velocidad_actual, &v_out, &abs_velocidad_ref,   // les puse el absoluto de una
-    Kp, Ki, Kd, 
+    Kp_motor_derecho, Ki_motor_derecho, Kd_motor_derecho,
     QuickPID::pMode::pOnError, 
     QuickPID::dMode::dOnMeas, 
     QuickPID::iAwMode::iAwCondition, // <-- CORRECCIÓN: Modo Anti-Windup añadido
@@ -276,7 +224,7 @@ void pidMotorDerTask(void *pvparameters){
     
     //PARAMETROS
     pid.SetOutputLimits(LIMITE_NEGATIVO_PID_MOTOR, LIMITE_POSITIVO_PID_MOTOR);
-    pid.SetSampleTimeUs(FRECUENCIA_MOTORES * 1000);  // la frecuencia pal pid      
+    pid.SetSampleTimeUs(FRECUENCIA_PID_MOTORES * 1000);  // la frecuencia pal pid      
     pid.SetMode(QuickPID::Control::timer); 
 
     //LOOP
@@ -305,7 +253,7 @@ void pidMotorDerTask(void *pvparameters){
         xQueueOverwrite(ColaLectorDutyDer, &duty); // para que el envio a jetson tenga la ultima wea
 
     // DELAY
-    vTaskDelayUntil(&xLastWakeTime, xfrec); 
+       vTaskDelayUntil(&xLastWakeTime, xfrec); 
     }
 }
 
@@ -323,7 +271,7 @@ void pidControlDireccionAngularTask(void *pvParameters){
     // SETEO EL PID
     QuickPID pidAngulo(
         &teta_actual, &v_diff, &teta_ref,
-        Kp_theta, Ki_theta, Kd_theta,
+        Kp_ang, Ki_ang, Kd_ang,
         QuickPID::pMode::pOnError,
         QuickPID::dMode::dOnMeas,
         QuickPID::iAwMode::iAwCondition,
@@ -352,15 +300,14 @@ void pidControlDireccionAngularTask(void *pvParameters){
 
         pidAngulo.Compute();
 
-        // Salida del control de angulo: diferencial de velocidad [cm/s].
-        // El avance (v_total) se suma despues en asignacionVelocidadRuedasTask.
+        // Modelo uniciclo: velocidad de avance comun + correccion diferencial.
         // Convencion horario+: para girar horario (error>0) la rueda izquierda
         // va mas rapido que la derecha.
-        v_angular = v_avance + v_diff;   // v_avance=0 aqui; el avance entra por v_total
+        v_angular = v_avance + v_diff;   // Aca lo cambie a v_angular, en otro lado se transforma a velocidad de cada rueda.;
 
-        // ENVIO al conversor (usa peek -> overwrite para no perder el ultimo valor)
-        xQueueOverwrite(ColaUsoVelAng, &v_angular);
-        xQueueOverwrite(ColaLecturaVelAng, &v_angular);
+        // ENVIO a los PID de velocidad (lazo interno de la cascada)
+        xQueueSend(ColaUsoVelAng, &v_angular, 0);   //  envia a v angular
+        xQueueSend(ColaLecturaVelAng, &v_angular,0);
         // DELAY
         vTaskDelayUntil(&xLastWakeTime, xfrec);
     }
@@ -368,7 +315,7 @@ void pidControlDireccionAngularTask(void *pvParameters){
 
 //Conversor V_total y V_angular a V_der V_izq
 void asignacionVelocidadRuedasTask(void *pvParameters) {
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_CONTROL_ANGULO);
+    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_CONTROL_ANGULO); // define tu frecuencia
     TickType_t xLastWakeTime = xTaskGetTickCount();
     float velocidad_total = 0.0f;
     float velocidad_angular_nueva = 0.0f;
@@ -376,25 +323,20 @@ void asignacionVelocidadRuedasTask(void *pvParameters) {
     float v_izq_out = 0.0f;
 
     for (;;) {
-        // Peek: tomamos el ultimo valor sin consumirlo (lo refrescan los productores)
-        xQueuePeek(ColaUsoVelAng, &velocidad_angular_nueva, 0);
-        xQueuePeek(ColaUsoVREFTotal, &velocidad_total, 0);
 
-        // Modelo diferencial: avance comun + diferencial de giro [cm/s]
-        v_izq_out = velocidad_total + velocidad_angular_nueva;
-        v_der_out = velocidad_total - velocidad_angular_nueva;
+        xQueueReceive(ColaUsoVelAng, &velocidad_angular_nueva, 0);
+        xQueueReceive(ColaUsoVREFTotal, &velocidad_total, 0);
+
+        v_izq_out = (2* velocidad_total - 0 * LARGO_ENTRE_RUEDAS) / (2 * RADIO_DE_RUEDA);
+        v_der_out =  velocidad_total * (2/RADIO_DE_RUEDA) - v_izq_out;
 
         xQueueSend(ColaUsoVREFIzq, &v_izq_out, 0);
         xQueueSend(ColaUsoVREFDer, &v_der_out, 0);
         xQueueOverwrite(ColaLecturaVREFIzq, &v_izq_out);
         xQueueOverwrite(ColaLecturaVREFDer, &v_der_out);
-
-        vTaskDelayUntil(&xLastWakeTime, xfrec);
+        vTaskDelayUntil(&xLastWakeTime, xfrec); 
         }
     }
-
-
-
 
 //--------------- CONTROL DE POSCICION -----------------
 void pidControlPosicionTask(void *pvParameters){
@@ -405,65 +347,75 @@ void pidControlPosicionTask(void *pvParameters){
     }
 }
 
-// -----------------LECTURA DE SENSORES ----------------
+// -----------------LECTURA DE SENSORES----------------
 //ENCODERS
-void lecturaEncoderIzqTask(void *pvparaameters){
+void lecturaEncoders(void *pvparaameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_ENCODER);      
-
-    float velocidad_leida = 0; 
-    int ticks;
-    // CREO EL OBJETO
-    encoderIzq.clearCount();
+    //izquierda
+    float velocidad_leida_izq = 0;
+    float distancia_del_ciclo_izq_filtrada = 0; 
+    float distancia_ciclo_izq_anterior = 0;
+    float distancia_del_ciclo_izq = 0;
+    float aceleracion_izq = 0;
+    //parametro
+    float alpha = 0.2;
+    //derecha
+    float velocidad_leida_der = 0;
+    float distancia_del_ciclo_der_filtrada = 0; 
+    float distancia_ciclo_der_anterior = 0;
+    float distancia_del_ciclo_der = 0;
+    float aceleracion_der = 0;
     // LOOP
     for (;;){
-        ticks = encoderIzq.getCount();
+        // Se cuentan los 2
+        int64_t count_actual_izq = encoderIzq.getCount();      
         encoderIzq.clearCount();
-        velocidad_leida = ticks * CM_POR_PULSO * 1000.0 / FRECUENCIA_ENCODER; // cm/s
-        
-        //ENVIAR
-        xQueueOverwrite(ColaLectorVelIzq, &velocidad_leida);  // para la lectura
-        xQueueSend(ColaUsoVelIzq, &velocidad_leida, 0);   // para activar el pid
-
-        // DELAY
-        vTaskDelayUntil(&xLastWakeTime, xfrec);
-    }
-}
-void lecturaEncoderDerTask(void *pvparaameters){
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_ENCODER);      
-
-    float velocidad_leida = 0; 
-    int ticks;
-    // CREO EL OBJETO
-    encoderDer.clearCount();
-    // LOOP
-    for (;;){
-        ticks = encoderDer.getCount();
+        int64_t count_actual_der = encoderDer.getCount();      
         encoderDer.clearCount();
-        velocidad_leida = ticks * CM_POR_PULSO * 1000.0 / FRECUENCIA_ENCODER; // cm/s
+        distancia_del_ciclo_izq = count_actual_izq * CM_POR_PULSO;
+        distancia_del_ciclo_izq_filtrada = alpha * distancia_del_ciclo_izq + (1-alpha) * distancia_ciclo_izq_anterior;
+        distancia_ciclo_izq_anterior = distancia_del_ciclo_izq_filtrada;
+
+        velocidad_leida_izq =  distancia_del_ciclo_izq_filtrada * 1000.0f / FRECUENCIA_ENCODER;  //   cm/s
+        aceleracion_izq = velocidad_leida_izq * 1000.0f / FRECUENCIA_ENCODER;
+
+
+        distancia_del_ciclo_der = count_actual_der * CM_POR_PULSO;
+        distancia_del_ciclo_der_filtrada = alpha * distancia_del_ciclo_der + (1-alpha) * distancia_ciclo_der_anterior;
+        distancia_ciclo_der_anterior = distancia_del_ciclo_der_filtrada;
+
+        velocidad_leida_der =  distancia_del_ciclo_der_filtrada * 1000.0f / FRECUENCIA_ENCODER;  //   cm/s
+        aceleracion_der = velocidad_leida_der * 1000.0f / FRECUENCIA_ENCODER;
+
+        if (abs(distancia_del_ciclo_der_filtrada) < 0.1){distancia_del_ciclo_der_filtrada = 0;}
+
+        if (abs(distancia_del_ciclo_izq_filtrada) < 0.1){distancia_del_ciclo_izq_filtrada = 0;}
+
+
+
+        // Se lee la cuenta
+
         
         //ENVIAR
-        xQueueOverwrite(ColaLectorVelDer, &velocidad_leida);  // para la lectura
-        xQueueSend(ColaUsoVelDer, &velocidad_leida, 0);   // para activar el pid
+        xQueueOverwrite(ColaLectorVelIzq, &velocidad_leida_izq);  // para la lectura
+        xQueueSend(ColaUsoVelIzq, &velocidad_leida_izq, 0);   // para activar el pid
+
+        xQueueOverwrite(ColaLectorVelDer, &velocidad_leida_der);  // para la lectura
+        xQueueSend(ColaUsoVelDer, &velocidad_leida_der, 0);   // para activar el pid
 
         // DELAY
         vTaskDelayUntil(&xLastWakeTime, xfrec);
     }
 }
 
-//IMU: lee la IMU y publica DatosImu (omega, yaw, accel cm/s^2) para el estimador
+//IMU
 void lecturaImuTask(void *pvparameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_IMU);
+    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_LECTURA);
 
-    DatosImu d;
-    for (;;){
-        leer_imu(d);
-        xQueueOverwrite(ColaUsoImu, &d); // el estimador la consume con peek
 
-        vTaskDelayUntil(&xLastWakeTime, xfrec);
-    }
+
 }
 
 //Sensores de poscicion
@@ -471,152 +423,14 @@ void lecturaPosicionTask(void *pvParameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_LECTURA);
 }
-
-
-
 // ---------------CALCULO DE POSCICION---------------
-//Estimador de poscicion: consolida velocidad de rueda (encoders) + IMU
+//Estimador de poscicion
 void estimadorDePoscicionTask(void *pvParameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_IMU);
-
-    EstadoEstimador est;
-    estimador_init(est);
-
-    DatosImu imu = {0};
-    float v_izq = 0.0f, v_der = 0.0f;   // cm/s (los publican los encoders)
-    PoseReset reset;
-    TickType_t t_prev = xTaskGetTickCount();
-    float dt = 0.0f;
-    float teta = 0.0f;
-
     for (;;){
-        // 0. Reset de pose si la Jetson/ArUco lo solicito
-        if (xQueueReceive(ColaResetPose, &reset, 0) == pdTRUE){
-            estimador_set_pose(est, reset.x, reset.y, reset.teta);
-        }
-
-        // 1. Datos ya publicados por otros modulos (no releemos sensores)
-        xQueuePeek(ColaUsoImu,       &imu,   0); // IMU (lecturaImuTask)
-        xQueuePeek(ColaLectorVelIzq, &v_izq, 0); // velocidad rueda izq [cm/s]
-        xQueuePeek(ColaLectorVelDer, &v_der, 0); // velocidad rueda der [cm/s]
-
-        // 2. dt real de la tarea
-        TickType_t ahora = xTaskGetTickCount();
-        dt = (float)(ahora - t_prev) * portTICK_PERIOD_MS / 1000.0f;
-        t_prev = ahora;
-
-        // 3. Estimacion consolidada (cm, cm/s, grados)
-        estimador_update(est, v_izq, v_der, imu.yaw_deg, imu.accel_x, dt);
-
-        // 4. Publicar heading y posicion
-        teta = est.teta;
-        xQueueOverwrite(ColaUsoTeta,     &teta);   // para el control de angulo
-        xQueueOverwrite(ColaLecturaTeta, &teta);   // telemetria
-
-        Posicion pos = { est.x, est.y };
-        xQueueOverwrite(ColaUsoPosicion,     &pos);
-        xQueueOverwrite(ColaLecturaPosicion, &pos);
-
-        vTaskDelayUntil(&xLastWakeTime, xfrec);
+        // -- LENAR --
     }
 }
-// -----------------RUTINA DE PRUEBA: CUADRADO ----------------
-// Maquina de estados: avanza RUTINA_LADO_CM, gira RUTINA_GIRO_DEG a la derecha
-// (en el sitio), repetido RUTINA_NUM_LADOS veces, y se detiene. Comanda la
-// cascada escribiendo v_total (ColaUsoVREFTotal) y teta_ref (ColaUsoTetaRef).
-void rutinaCuadradoTask(void *pvParameters){
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_RUTINA);
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-
-    // Espera inicial para estabilizar tras la calibracion de la IMU
-    vTaskDelay(pdMS_TO_TICKS(2000));
-
-    enum Fase { AVANZAR, GIRAR, HECHO };
-    Fase fase = AVANZAR;
-
-    int   lado     = 0;       // tramos completados
-    float teta_obj = 0.0f;    // heading objetivo [grados]
-    int   settle   = 0;       // anti-rebote del giro
-    float v_total  = 0.0f;    // velocidad de avance comandada [cm/s]
-
-    Posicion pos = {0, 0};
-    Posicion pos0 = {0, 0};   // origen del tramo actual [cm]
-    float teta = 0.0f;
-
-    // Pose inicial = origen y rumbo del primer tramo
-    xQueuePeek(ColaUsoTeta,         &teta, 0); teta_obj = teta;
-    xQueuePeek(ColaLecturaPosicion, &pos0, 0);
-
-    for (;;){
-        // Pose actual
-        xQueuePeek(ColaUsoTeta,         &teta, 0);
-        xQueuePeek(ColaLecturaPosicion, &pos,  0);
-
-        switch (fase){
-            case AVANZAR: {
-                v_total = RUTINA_VEL_AVANCE;
-                xQueueOverwrite(ColaUsoTetaRef,     &teta_obj);
-                xQueueOverwrite(ColaLecturaTetaRef, &teta_obj);
-
-                float dx = pos.x - pos0.x, dy = pos.y - pos0.y;
-                float dist = sqrtf(dx * dx + dy * dy);
-                if (dist >= RUTINA_LADO_CM){
-                    v_total = 0.0f;
-                    teta_obj = wrap180(teta_obj + RUTINA_GIRO_DEG); // derecha = horario +
-                    settle = 0;
-                    fase = GIRAR;
-                }
-                break;
-            }
-            case GIRAR: {
-                v_total = 0.0f; // giro en el sitio
-                xQueueOverwrite(ColaUsoTetaRef,     &teta_obj);
-                xQueueOverwrite(ColaLecturaTetaRef, &teta_obj);
-
-                float err = fabsf(wrap180(teta_obj - teta));
-                if (err < RUTINA_TOL_ANG){
-                    if (++settle >= RUTINA_SETTLE_N){
-                        lado++;
-                        if (lado >= RUTINA_NUM_LADOS){
-                            fase = HECHO;
-                        } else {
-                            pos0 = pos;        // origen del siguiente tramo
-                            fase = AVANZAR;
-                        }
-                    }
-                } else {
-                    settle = 0;
-                }
-                break;
-            }
-            case HECHO:
-            default: {
-                v_total = 0.0f;
-                xQueueOverwrite(ColaUsoTetaRef,     &teta); // sin error -> ruedas en 0
-                xQueueOverwrite(ColaLecturaTetaRef, &teta);
-                break;
-            }
-        }
-
-        // Comando de avance a la cascada
-        xQueueOverwrite(ColaUsoVREFTotal,     &v_total);
-        xQueueOverwrite(ColaLecturaVREFTotal, &v_total);
-
-#if TEST_ESTIMADOR
-        static int _decr = 0;
-        if (++_decr >= 4){
-            _decr = 0;
-            const char *nf = (fase == AVANZAR) ? "AVANZA" :
-                             (fase == GIRAR)   ? "GIRA"   : "HECHO";
-            DEBUG_PRINTF("[RUTINA] lado=%d %s teta=%6.1f obj=%6.1f x=%6.1f y=%6.1f\n",
-                         lado, nf, teta, teta_obj, pos.x, pos.y);
-        }
-#endif
-        vTaskDelayUntil(&xLastWakeTime, xfrec);
-    }
-}
-
 //  ----------------ENVIO DE DATOS A JETSON ----------------
 
 void enviarJetsonTask(void *pvParameters){
@@ -625,7 +439,6 @@ void enviarJetsonTask(void *pvParameters){
     Envio data;
     memset(&data, 0, sizeof(data)); //inicio todos en 0
     data.header = 0xAA;  // asigno el header
-    Posicion _pos = {0, 0};
  
     for (;;){
 
@@ -634,8 +447,6 @@ void enviarJetsonTask(void *pvParameters){
         xQueuePeek(ColaLectorDutyIzq, &data.duty_izq, 0);
         xQueuePeek(ColaLectorDutyDer, &data.duty_der, 0);
         //-----------------------TETA-----------------------
-        xQueuePeek(ColaLecturaTeta,    &data.teta, 0);
-        xQueuePeek(ColaLecturaTetaRef, &data.teta_ref, 0);
 
         //-----------------------V_IZQ V_DER ACTUAL-----------------------
         //IZQ
@@ -656,10 +467,6 @@ void enviarJetsonTask(void *pvParameters){
         //-----------------------VTOTAL REF-----------------------
 
         //-----------------------X Y ESTIMADO-----------------------
-        if (xQueuePeek(ColaLecturaPosicion, &_pos, 0) == pdTRUE){
-            data.x_pos = _pos.x;
-            data.y_pos = _pos.y;
-        }
 
         //-----------------------X Y REF-----------------------
 
@@ -691,13 +498,13 @@ void leerJetsonTaks(void *pvParameters){
             // ------------------------------MANEJO DE COLAS ------------------------------
 
             //------------------DUTY----------------
-            if (false) { // FALSE SI NO QUIERES USARLO
+            if (true) { // FALSE SI NO QUIERES USARLO
             xQueueSend(ColaUsoDutyIzq, &data_leida.duty_izq ,0);   
             xQueueSend(ColaUsoDutyDer, &data_leida.duty_der ,0); 
             }
 
             //------------------TETA----------------
-            if (true) {  // FALSE SI NO QUIERES USARLO
+            if (false) {  // FALSE SI NO QUIERES USARLO
                 xQueueSend(ColaUsoTetaRef, &data_leida.teta_ref, 0);
             }
 
@@ -709,7 +516,7 @@ void leerJetsonTaks(void *pvParameters){
             }
 
             // ------------------V_TOTAL_REF----------------
-            if (true) { // FALSE SI NO QUIERES USARLO
+            if (false) { // FALSE SI NO QUIERES USARLO
                 xQueueSend(ColaUsoVREFTotal, &data_leida.v_total_ref, 0);
             }
             
@@ -776,30 +583,24 @@ void setup_rtos() {
     ColaUsoVelAng = xQueueCreate(1, sizeof(float));
     ColaLecturaVelAng= xQueueCreate(1, sizeof(float));
 
-    // ------------------ Colas POSICION ------------
-    ColaUsoPosicion     = xQueueCreate(1, sizeof(Posicion));
-    ColaLecturaPosicion = xQueueCreate(1, sizeof(Posicion));
-    ColaUsoPosicionRef     = xQueueCreate(1, sizeof(Posicion));
-    ColaLecturaPosicionRef = xQueueCreate(1, sizeof(Posicion));
-
-    // ------------------ Cola IMU y reset de pose ------------
-    ColaUsoImu    = xQueueCreate(1, sizeof(DatosImu));
-    ColaResetPose = xQueueCreate(1, sizeof(PoseReset));
 
 
 
-    // Inicializamos v_total en 0 para que los peek tengan valor valido
-    { float _v0 = 0.0f; xQueueOverwrite(ColaUsoVREFTotal, &_v0); }
-
-
-
-   // ENCODERS
     ESP32Encoder::useInternalWeakPullResistors = puType::up;
-
     encoderIzq.attachFullQuad(pinB1, pinA1);
+    encoderIzq.setFilter(1023);
     encoderIzq.clearCount();
+
+
+    ESP32Encoder::useInternalWeakPullResistors = puType::up;
     encoderDer.attachFullQuad(pinA2, pinB2);
+    encoderDer.setFilter(1023);
     encoderDer.clearCount();
+
+
+
+
+
 
 
     // USO MOTORES
@@ -817,50 +618,116 @@ void setup_rtos() {
         "motoritask", //nombre
         2048, //habra que analizarlo
         NULL, //parametros
-        10, // Prioridadanalizar
+        9, // Prioridadanalizar
         NULL, //handel
         1 //core
     );
 
      // JETOSN Y ESP
-     // En modo banco de pruebas NO se crean: el envio es binario y se
-     // mezclaria con el log de texto de la rutina en el mismo puerto serial.
-#if !TEST_ESTIMADOR
     xTaskCreatePinnedToCore(
       enviarJetsonTask, //funcion
        "enviodatos", //nombre
         4096, //habra que analizarlo Stack size (Bytes) //creo que esta es la cantidad maxima de data que puede sacar
         NULL, //parametros
-    5, // Prioridadanalizar
+    9, // Prioridadanalizar
        NULL, //handel
      0 //core
     );
-    xTaskCreatePinnedToCore(leerJetsonTaks,  "leerdatos", 2048,  NULL,4 , NULL, 0);
-#endif
+
+    
+    xTaskCreatePinnedToCore(leerJetsonTaks,  "leerdatos", 2048,  NULL, 4, NULL, 0);
 
     // CONTROLADOR
     //xTaskCreatePinnedToCore(pasar_rampa_izq_task,  "rampaizq",4096,  NULL, 3, NULL, 1);   ESTA DANDO MUCHOS PROBELMAS LA RAMPA, LA bypaseare
     //MOTOR
-    xTaskCreatePinnedToCore(pidMotorIzqTask,  "pidizq",4096,  NULL, 8, NULL, 1);
-    xTaskCreatePinnedToCore(pidMotorDerTask,  "pidder",4096,  NULL, 8, NULL, 1);
+    //xTaskCreatePinnedToCore(pidMotorIzqTask,  "pidizq",4096,  NULL, 5, NULL, 1);
+    //xTaskCreatePinnedToCore(pidMotorDerTask,  "pidder",4096,  NULL, 4, NULL, 1);
 
     //ANGULO
     //Pid
-    xTaskCreatePinnedToCore(pidControlDireccionAngularTask,  "pid_ang",4096,  NULL, 6, NULL, 1);
+    //xTaskCreatePinnedToCore(pidControlDireccionAngularTask,  "pid_ang",4096,  NULL, 6, NULL, 1);
     //conversor
-    xTaskCreatePinnedToCore(asignacionVelocidadRuedasTask,  "Conversor",4096,  NULL, 5, NULL, 1);
+    //xTaskCreatePinnedToCore(asignacionVelocidadRuedasTask,  "Conversor",4096,  NULL, 5, NULL, 1);
 
     //ENCODER
-    xTaskCreatePinnedToCore(lecturaEncoderIzqTask,  "encizq",3072,  NULL, 7, NULL, 1);
-    xTaskCreatePinnedToCore(lecturaEncoderDerTask,  "encder",3072,  NULL, 7, NULL, 1);
+    xTaskCreatePinnedToCore(lecturaEncoders,  "encizq",3072,  NULL, 7, NULL, 1);
+    ///xTaskCreatePinnedToCore(lecturaEncoderIzqTask,  "encizq",3072,  NULL, 7, NULL, 1);
+    //xTaskCreatePinnedToCore(lecturaEncoderDerTask,  "encder",3072,  NULL, 8, NULL, 1);
 
-    //IMU + ESTIMADOR DE POSICION
-    xTaskCreatePinnedToCore(lecturaImuTask,          "imu",       4096, NULL, 6, NULL, 1);
-    xTaskCreatePinnedToCore(estimadorDePoscicionTask,"estimador", 4096, NULL, 6, NULL, 1);
 
-    //RUTINA DE PRUEBA (cuadrado), solo si esta habilitada
-#if RUTINA_CUADRADO
-    xTaskCreatePinnedToCore(rutinaCuadradoTask, "rutina", 4096, NULL, 4, NULL, 1);
-#endif
+}
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//Rampas
+void pasar_rampa_izq_task(void *pvParameters){
+
+
+
+
+    float vref = 0;
+    float vRampa = 0;
+    float dt = FRECUENCIA_ENCODER / 1000.0f;
+    for (;;){
+        if (xQueueReceive(ColaUsoVREFIzq, &vref,portMAX_DELAY) == pdTRUE){
+            aplicarRampa(vref, vRampa, dt);
+
+            xQueueOverwrite(ColaLecturaRampaIzq, &vref);
+        }
+    }
+}
+void pasar_rampa_der_task(void *pvParameters){
+
+
+
+
+    float vref = 0;
+    float vRampa = 0;
+    float dt = FRECUENCIA_ENCODER / 1000.0f;
+    for (;;){
+        if (xQueueReceive(ColaUsoVREFDer, &vref,portMAX_DELAY) == pdTRUE){
+            aplicarRampa(vref, vRampa, dt);
+
+            xQueueOverwrite(ColaLecturaRampaDer, &vref);
+        }
+    }
 }

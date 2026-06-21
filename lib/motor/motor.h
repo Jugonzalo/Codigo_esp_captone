@@ -25,11 +25,14 @@ extern bool der_adelante; // true = adelante, false = atrás
 extern bool izq_adelante; // true = adelante, false = atrás
 
 // ====== PINES DEL ENCODER ======
+
+
+
 // Motor 1 (Rueda Izquierda)
 #define pinA1 26 // GPIO14 (D5)   FASE A (AMARILLO )
 #define pinB1 27 // GPIO12 (D6) FASE B (VERDE)
 
-// Motor 2 (Rueda Derecha)
+ //Motor 2 (Rueda Derecha)
 #define pinA2 34 // GPIO5 (D1)
 #define pinB2 35 // GPIO4 (D2)
 
@@ -37,54 +40,33 @@ extern bool izq_adelante; // true = adelante, false = atrás
 
 
 
-// ===== CARACTERIZACIÓN EN cm/s (Y = mX + b) =====
-// (reescalada x100 desde la caracterizacion original en m/s)
+
+
+
+
+
+
+
+
+// ===== CARACTERIZACIÓN EN m/s (Y = mX + b) =====
 // Motor 1 (Izquierdo)
-const float M1_m = 0.709362;
-const float M1_b = -47.60306;
+const float M1_m = 0.00709362;
+const float M1_b = -0.4760306;
 const int M1_MIN_DUTY = 130;
 
 // Motor 2 (Derecho)
-const float M2_m = 0.85289;
-const float M2_b = -90.35745;
+const float M2_m = 0.0085289;
+const float M2_b = -0.9035745;
 const int M2_MIN_DUTY = 135;
 
 const int MAX_DUTY = 245;
 
-// ===== PARÁMETROS MECÁNICOS =====
-// CM_POR_PULSO = (2 * PI * Radio_Rueda) / (Pulsos_Por_Revolucion_Del_Eje)
-// (placeholder: =METROS_POR_PULSO*100, calibrar fisicamente)
-const float METROS_POR_PULSO = 0.0001;
-const float CM_POR_PULSO = 0.01;
-
 // ===== PARÁMETROS DE CONTROL =====
-const float ACCEL_MAX = 50.0; // cm/s² para el Soft Start
-
-// Usamos float para aprovechar la FPU nativa de la ESP32
-const float Kp = 200.0, Ki = 200.0, Kd = 1.0; 
+const float ACCEL_MAX = 0.5; // m/s² para el Soft Start
 
 
 
 
-
-// ====== VARIABLES VOLÁTILES ======
-extern volatile long contadorPulsos1;
-extern volatile long contadorPulsos2;
-
-extern long pulsosAnteriores1;
-extern long pulsosAnteriores2;
-
-// ====== CONTROL DE TIEMPO ======
-extern unsigned long tiempoAnterior;
-extern const unsigned long intervalo; // 1000 ms = 1 segundo
-
-// ====== CONSTANTES FÍSICAS ======
-extern const float PPR;
-extern const float RELACION_ENGRANAJES;
-extern const float PPR_TOTAL;
-
-extern const float DIAMETRO_RUEDA_CM;
-extern const float PERIMETRO_RUEDA_CM;
 
 // ===== Prototipos =====
 void motorSetup();

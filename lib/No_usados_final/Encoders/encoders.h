@@ -8,12 +8,12 @@
 
 // ====== PINES DEL ENCODER ======
 // Usamos #ifndef por si acaso ya los habías definido en otro lado
-#ifndef pinA1
-  #define pinA1 36 // Motor 1 (Rueda Izquierda)
-  #define pinB1 39 
-  #define pinA2 34 // Motor 2 (Rueda Derecha)
-  #define pinB2 35 
-#endif
+//#ifndef pinA1
+//  #define pinA1 36 // Motor 1 (Rueda Izquierda)
+ // #define pinB1 39 
+ // #define pinA2 34 // Motor 2 (Rueda Derecha)
+ // #define pinB2 35 
+///#endif
 
 
 // ===== Pin Analógico para leer Voltaje =====

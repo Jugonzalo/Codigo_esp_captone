@@ -6,6 +6,9 @@
 #include <Arduino.h>
 
 
+
+
+int64_t count_anterior = 0;   // acumulado anterior para calcular delta
 void setup() {
   if (DEBUG) {
     Serial.begin(115200);
@@ -13,16 +16,18 @@ void setup() {
 
 
   motorSetup();    // Inicializa motores y canales PWM
-  setup_jetson();  // Configura la comunicación serial con Jetson
-  setup_imu();     // Inicializa y calibra la IMU (robot inmóvil durante esto)
+  //firebaseSetup(); // Conecta WiFi e inicializa Firebase
+  setup_jetson();   // Configura la comunicación serial con Jetson
+  //setup_sensores(); // Configura los sensores
 
 
   setup_rtos(); // inicia todas las task
-}
+} 
 
 // =============================================================================
 //  LOOP
 // =============================================================================
+
 void loop() {
     //leer_datos_jetson();  // Lee datos de Jetson y actualiza velocidades globales
     //enviar_datos_jetson(); // Lee datos de Jetson y actualiza velocidades globales
@@ -32,4 +37,6 @@ void loop() {
     //cambiar_velocidad_derecha(velocidad_derecha_global);
     //cambiar_velocidad_izquierda(velocidad_izquierda_global);
     vTaskDelete(NULL);  // DEJA SOLO ESTA PRENDIDA SI QUIERES USAR EL RTOS
+
   }
+

@@ -4,11 +4,12 @@
 
 
 
-#define FRECUENCIA_MOTORES 1 // en MiliSeg, segun el andres hay cuello de botella
-#define FRECUENCIA_LECTURA 20   //
-#define FRECUENCIA_ENVIO 20
+
+#define FRECUENCIA_LECTURA 200   //
+#define FRECUENCIA_ENVIO 200
 #define FRECUENCIA_IMU 10
-#define FRECUENCIA_ENCODER 10
+#define FRECUENCIA_PID_MOTORES 5 // en MiliSeg, 1 es 1kz y 1000 es 1hz
+#define FRECUENCIA_ENCODER 10   // en MiliSeg, 1 es 1kz y 1000 es 1hz
 #define FRECUENCIA_CONTROL_ANGULO 10
 
 #define LIMITE_POSITIVO_PID_MOTOR 200
@@ -49,8 +50,10 @@ const int   RUTINA_SETTLE_N   = 8;     // ciclos seguidos dentro de tolerancia (
 
 // ====== PINES DEL ENCODER ======
 // Motor 1 (Rueda Izquierda)
-#define pinA1 26 // GPIO14 (D5) PARECE QUE LOS COLORES ESTAN INVERTIDOS POR LO QUE LOS DARE VUELTA EN SOFTWERE
-#define pinB1 27 // GPIO12 (D6)
+// ====== PINES DEL ENCODER ======
+// Motor 1 (Rueda Izquierda)
+#define pinA1 26 // GPIO14 (D5)   FASE A (AMARILLO )
+#define pinB1 27 // GPIO12 (D6) FASE B (VERDE)
 
 // Motor 2 (Rueda Derecha)
 #define pinA2 34 // GPIO5 (D1)
@@ -70,7 +73,8 @@ extern ESP32Encoder encoderIzq;
 
 constexpr float RADIO_DE_RUEDA = 3.5f; // en cm
 constexpr float LARGO_ENTRE_RUEDAS = 18.2f;
-
+constexpr float PERIMETRO = 7 * 3.14;
+constexpr float CM_POR_PULSO = PERIMETRO / 897;   // EN PROMEDIO LEI 8978 cm por vuelta
 
 //funciones
 
