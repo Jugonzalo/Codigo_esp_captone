@@ -24,7 +24,7 @@ void aplicarRampa(float ref, float &ramp, float dt) {
 }
 
 int calcularDuty(float vel_deseada, float correccion_pid, float m, float b, int min_duty) {
-    if (vel_deseada <= 1.0) return 0; // cm/s (antes 0.01 m/s)
+    if (vel_deseada <= 0.1) return 0; // cm/s (antes 0.01 m/s)
     
     float duty_base = (vel_deseada - b) / m;
     int duty_final = round(duty_base + correccion_pid);

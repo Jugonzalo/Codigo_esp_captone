@@ -48,16 +48,16 @@ extern bool izq_adelante; // true = adelante, false = atrás
 
 
 
-// ===== CARACTERIZACIÓN EN m/s (Y = mX + b) =====
+// ===== CARACTERIZACIÓN EN cm/s (Y = mX + b) =====
 // Motor 1 (Izquierdo)
-const float M1_m = 0.00709362;
-const float M1_b = -0.4760306;
-const int M1_MIN_DUTY = 130;
+const float M1_m = 22/37;
+const float M1_b = 8.91;
+const int M1_MIN_DUTY = 20;
 
 // Motor 2 (Derecho)
-const float M2_m = 0.0085289;
-const float M2_b = -0.9035745;
-const int M2_MIN_DUTY = 135;
+const float M2_m = 0.53;
+const float M2_b = 77.55;
+const int M2_MIN_DUTY = 20;
 
 const int MAX_DUTY = 245;
 

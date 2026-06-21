@@ -133,7 +133,6 @@ void motorizquierdoSwitchTask(void *pvParameters){
     for(;;){
         if (xQueueReceive(ColaUsoDutyIzq, &velocidad_nueva, portMAX_DELAY) == pdTRUE) {
             cambiar_velocidad_izquierda(velocidad_nueva);
-            xQueueSend(ColaLectorDutyIzq, &velocidad_nueva,0);
         }
     }
 }
@@ -191,7 +190,7 @@ void pidMotorIzqTask(void *pvparameters){
 
         // ENVIO
         xQueueSend(ColaUsoDutyIzq, &duty, 0); //este va aca porque se activa con la cola el otro 
-        xQueueOverwrite(ColaLectorDutyIzq, &duty); // para que el envio a jetson tenga la ultima wea
+        xQueueOverwrite(ColaLectorDutyIzq, &v_out); // para que el envio a jetson tenga la ultima wea
 
    
     // DELAY
@@ -240,7 +239,7 @@ void pidMotorDerTask(void *pvparameters){
         pid.Compute();
         
         // Obtenemos la magnitud bruta del PWM (tiene que ser positiva)
-        int duty_magnitud = calcularDuty(abs_velocidad_ref, v_out, M1_m, M1_b, M1_MIN_DUTY);
+        int duty_magnitud = calcularDuty(abs_velocidad_ref, v_out, M2_m, M2_b, M2_MIN_DUTY);
 
         if (v_ramp_ref < 0) {
             duty = -duty_magnitud; 
@@ -271,7 +270,7 @@ void pidControlDireccionAngularTask(void *pvParameters){
     // SETEO EL PID
     QuickPID pidAngulo(
         &teta_actual, &v_diff, &teta_ref,
-        Kp_ang, Ki_ang, Kd_ang,
+        Kp_theta, Ki_theta, Kd_theta,
         QuickPID::pMode::pOnError,
         QuickPID::dMode::dOnMeas,
         QuickPID::iAwMode::iAwCondition,
@@ -354,6 +353,7 @@ void lecturaEncoders(void *pvparaameters){
     const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_ENCODER);      
     //izquierda
     float velocidad_leida_izq = 0;
+    float velocidad_leida_izq_anterior = 0;
     float distancia_del_ciclo_izq_filtrada = 0; 
     float distancia_ciclo_izq_anterior = 0;
     float distancia_del_ciclo_izq = 0;
@@ -362,6 +362,7 @@ void lecturaEncoders(void *pvparaameters){
     float alpha = 0.2;
     //derecha
     float velocidad_leida_der = 0;
+    float velocidad_leida_der_anterior = 0;
     float distancia_del_ciclo_der_filtrada = 0; 
     float distancia_ciclo_der_anterior = 0;
     float distancia_del_ciclo_der = 0;
@@ -378,7 +379,8 @@ void lecturaEncoders(void *pvparaameters){
         distancia_ciclo_izq_anterior = distancia_del_ciclo_izq_filtrada;
 
         velocidad_leida_izq =  distancia_del_ciclo_izq_filtrada * 1000.0f / FRECUENCIA_ENCODER;  //   cm/s
-        aceleracion_izq = velocidad_leida_izq * 1000.0f / FRECUENCIA_ENCODER;
+        aceleracion_izq = velocidad_leida_izq - velocidad_leida_izq_anterior * 1000.0f / FRECUENCIA_ENCODER;
+        velocidad_leida_izq_anterior = velocidad_leida_izq;
 
 
         distancia_del_ciclo_der = count_actual_der * CM_POR_PULSO;
@@ -386,11 +388,12 @@ void lecturaEncoders(void *pvparaameters){
         distancia_ciclo_der_anterior = distancia_del_ciclo_der_filtrada;
 
         velocidad_leida_der =  distancia_del_ciclo_der_filtrada * 1000.0f / FRECUENCIA_ENCODER;  //   cm/s
-        aceleracion_der = velocidad_leida_der * 1000.0f / FRECUENCIA_ENCODER;
+        aceleracion_der = (velocidad_leida_der - velocidad_leida_der_anterior)* 1000.0f / FRECUENCIA_ENCODER;
+        velocidad_leida_der_anterior  =velocidad_leida_der;
 
-        if (abs(distancia_del_ciclo_der_filtrada) < 0.1){distancia_del_ciclo_der_filtrada = 0;}
+        if (abs(distancia_del_ciclo_der_filtrada) < 0.001){distancia_ciclo_der_anterior = 0;}
 
-        if (abs(distancia_del_ciclo_izq_filtrada) < 0.1){distancia_del_ciclo_izq_filtrada = 0;}
+        if (abs(distancia_del_ciclo_izq_filtrada) < 0.001){distancia_ciclo_izq_anterior = 0;}
 
 
 
@@ -498,7 +501,7 @@ void leerJetsonTaks(void *pvParameters){
             // ------------------------------MANEJO DE COLAS ------------------------------
 
             //------------------DUTY----------------
-            if (true) { // FALSE SI NO QUIERES USARLO
+            if (false) { // FALSE SI NO QUIERES USARLO
             xQueueSend(ColaUsoDutyIzq, &data_leida.duty_izq ,0);   
             xQueueSend(ColaUsoDutyDer, &data_leida.duty_der ,0); 
             }
@@ -510,7 +513,7 @@ void leerJetsonTaks(void *pvParameters){
 
 
             // ------------------VREF_IZQ_DER----------------
-            if (false) { // FALSE SI NO QUIERES USARLO
+            if (true) { // FALSE SI NO QUIERES USARLO
             xQueueSend(ColaUsoVREFIzq, &data_leida.v_izq_ref, 0);
             xQueueSend(ColaUsoVREFDer, &data_leida.v_der_ref, 0);
             }
@@ -640,8 +643,8 @@ void setup_rtos() {
     // CONTROLADOR
     //xTaskCreatePinnedToCore(pasar_rampa_izq_task,  "rampaizq",4096,  NULL, 3, NULL, 1);   ESTA DANDO MUCHOS PROBELMAS LA RAMPA, LA bypaseare
     //MOTOR
-    //xTaskCreatePinnedToCore(pidMotorIzqTask,  "pidizq",4096,  NULL, 5, NULL, 1);
-    //xTaskCreatePinnedToCore(pidMotorDerTask,  "pidder",4096,  NULL, 4, NULL, 1);
+    xTaskCreatePinnedToCore(pidMotorIzqTask,  "pidizq",4096,  NULL, 5, NULL, 1);
+    xTaskCreatePinnedToCore(pidMotorDerTask,  "pidder",4096,  NULL, 4, NULL, 1);
 
     //ANGULO
     //Pid
