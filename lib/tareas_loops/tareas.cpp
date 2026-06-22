@@ -91,11 +91,9 @@ void pidMotorDerTask(void *pvparameters){
 // --------------- CONTROL DE ANGULO ------------------
 // PID
 void pidControlDireccionAngularTask(void *pvParameters){
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_ENCODER * 1000);
 
     pidAngulo.SetOutputLimits(-VEL_GIRO_MAX, VEL_GIRO_MAX);
-    pidAngulo.SetSampleTimeUs(FRECUENCIA_CONTROL_ANGULO * 1000);
+    pidAngulo.SetSampleTimeUs(FRECUENCIA_ENCODER * 1000);
     pidAngulo.SetMode(QuickPID::Control::timer);
 
 
@@ -103,31 +101,33 @@ void pidControlDireccionAngularTask(void *pvParameters){
     float v_avance = 0.0f;   // velocidad de avance comun (rutina/secuenciador)
     float v_angular = 0.0f;
     float error = 0.0f;
-    float v_der_out = 0;
-    float v_izq_out = 0;
-    float velocidad_total = 0;
+    float v_der_out = 0.0f;
+    float v_izq_out = 0.0f;
+    float velocidad_total = 0.0f;
     // LOOP
     for (;;){
         // LEO REFERENCIA, MEDIDA Y VELOCIDAD DE AVANCE
         xQueuePeek(ColaUsoTetaRef,   &teta_ref ,0);
-        xQueueReceive(ColaUsoTeta,    &teta_med, portMAX_DELAY);
+        xQueueReceive(ColaUsoTeta,    &teta_actual, portMAX_DELAY);
         xQueuePeek(ColaUsoVREFTotal, &velocidad_total,0);
         
 
         // "Desenrollamos" la medida alrededor de la referencia para que el PID
         // vea el error mas corto en (-180,180] sin saltos en el wrap.
-        error = wrap180(teta_ref - teta_med);
-        teta_actual = teta_ref - error;  // => (teta_ref - teta_actual) = error
+
+
+        //Voy a dejar la parte del wrap en comentado por ahora
+        //error = wrap180(teta_ref - teta_med);
+        //teta_actual = teta_ref - error;  // => (teta_ref - teta_actual) = error
 
         pidAngulo.Compute();
 
-        // Modelo uniciclo: velocidad de avance comun + correccion diferencial.
-        v_angular = v_avance + v_diff;   // Aca lo cambie a v_angular
+        v_angular = v_diff;   // Aca lo cambie a v_angular
 
-        if (v_angular < 0.01){v_angular = 0;} //Para que no oscile por tonteras
+        if (fabs(v_angular) < 0.1){v_angular = 0.0f;} //Para que no oscile por tonteras
 
         //Los transformo a velocidad de cada rueda
-        v_der_out = (2.0 * velocidad_total - 0.0 * LARGO_ENTRE_RUEDAS) / 2.0;
+        v_der_out = (2.0 * velocidad_total - v_angular * LARGO_ENTRE_RUEDAS) / 2.0;
         v_izq_out =  velocidad_total * 2.0 - v_der_out;
         
         
@@ -139,14 +139,6 @@ void pidControlDireccionAngularTask(void *pvParameters){
     }
 }
 
-
-void pidControlPosicionTask(void *pvParameters){
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-    float velocidad_nueva = 0;
-    for (;;){
-    // -- LLENAR --
-    }
-}
 
 // -----------------LECTURA DE SENSORES----------------
 //ENCODERS
@@ -197,14 +189,20 @@ void lecturaEncoders(void *pvparaameters){
         aceleracion_der = (velocidad_leida_der - velocidad_leida_der_anterior)* 1000.0f / FRECUENCIA_ENCODER;
         velocidad_leida_der_anterior  =velocidad_leida_der;
 
-        if (abs(distancia_del_ciclo_der_filtrada) < 0.001){distancia_ciclo_der_anterior = 0;}
+        if (abs(distancia_del_ciclo_der_filtrada) < 0.001){distancia_ciclo_der_anterior = 0.0f;}
 
-        if (abs(distancia_del_ciclo_izq_filtrada) < 0.001){distancia_ciclo_izq_anterior = 0;}
+        if (abs(distancia_del_ciclo_izq_filtrada) < 0.001){distancia_ciclo_izq_anterior = 0.0f;}
 
         vel_angular = (velocidad_leida_izq - velocidad_leida_der)/ LARGO_ENTRE_RUEDAS;
-        delta_theta = vel_angular * (FRECUENCIA_ENCODER / 1000.0f);
+        delta_theta = (vel_angular * (FRECUENCIA_ENCODER / 1000.0f)) * (180.0f / 3.14f);
         theta_calculado = theta_calculado + delta_theta;
         
+        while (theta_calculado >= 360.0f) {
+            theta_calculado -= 360.0f;
+        }
+        while (theta_calculado < 0.0f) {
+            theta_calculado += 360.0f;
+}
 
         
 
@@ -221,6 +219,7 @@ void lecturaEncoders(void *pvparaameters){
         xQueueOverwrite(ColaUsoVelDer, &velocidad_leida_der);   // para activar el pid
 
         xQueueSend(ColaUsoTeta, &theta_calculado,0);   // DEMAS QUE AHI  tengo que añadir theta encoder y theta imu
+        xQueueOverwrite(ColaLecturaTeta, &theta_calculado);
 
         // DELAY
         vTaskDelayUntil(&xLastWakeTime, xfrec);
@@ -265,6 +264,7 @@ void enviarJetsonTask(void *pvParameters){
         xQueuePeek(ColaLectorDutyIzq, &data.duty_izq, 0);
         xQueuePeek(ColaLectorDutyDer, &data.duty_der, 0);
         //-----------------------TETA-----------------------
+        xQueuePeek(ColaLecturaTeta, &data.teta, 0);
 
         //-----------------------V_IZQ V_DER ACTUAL-----------------------
         //IZQ
@@ -321,21 +321,17 @@ void leerJetsonTaks(void *pvParameters){
             xQueueOverwrite(ColaUsoDutyDer, &data_leida.duty_der); 
             }
 
-            //------------------TETA----------------
-            if (false) {  // FALSE SI NO QUIERES USARLO
-                xQueueOverwrite(ColaUsoTetaRef, &data_leida.teta_ref);
-            }
-
 
             // ------------------VREF_IZQ_DER----------------
-            if (true) { // FALSE SI NO QUIERES USARLO
+            if (false) { // FALSE SI NO QUIERES USARLO
             xQueueOverwrite(ColaUsoVREFIzq, &data_leida.v_izq_ref);
             xQueueOverwrite(ColaUsoVREFDer, &data_leida.v_der_ref);
             }
 
-            // ------------------V_TOTAL_REF----------------
-            if (false) { // FALSE SI NO QUIERES USARLO
+            // ------------------V_TOTAL_REF Teta_REF----------------
+            if (true) { // FALSE SI NO QUIERES USARLO
                 xQueueOverwrite(ColaUsoVREFTotal, &data_leida.v_total_ref);
+                xQueueOverwrite(ColaUsoTetaRef, &data_leida.teta_ref);
             }
             
 
@@ -463,7 +459,7 @@ void setup_rtos() {
 
     //ANGULO
     //Pid
-    //xTaskCreatePinnedToCore(pidControlDireccionAngularTask,  "pid_ang",4096,  NULL, 6, NULL, 1);
+    xTaskCreatePinnedToCore(pidControlDireccionAngularTask,  "pid_ang",4096,  NULL, 6, NULL, 1);
     //conversor
     //xTaskCreatePinnedToCore(asignacionVelocidadRuedasTask,  "Conversor",4096,  NULL, 5, NULL, 1);
 

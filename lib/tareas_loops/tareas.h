@@ -40,16 +40,16 @@ constexpr float Kp_motor_izquierdo = 3.0f;
 constexpr float Ki_motor_izquierdo  = 0.3f; 
 constexpr float Kd_motor_izquierdo  = 0.01f; 
 // Controlador de angulo (Hay que tunearlo)
-constexpr float Kp_theta = 10.0f; 
-constexpr float Ki_theta  = 8.0f; 
-constexpr float Kd_theta  = 0.01f; 
+constexpr float Kp_theta = 0.5f; 
+constexpr float Ki_theta  = 0.1f; 
+constexpr float Kd_theta  = 0.05f; 
 // Controldador de poscicion
 constexpr float Kp_posicion = 1.0f; 
 constexpr float Ki_posicion  = 0.5f; 
 constexpr float Kd_posicion  = 0.1f; 
 
 
-const float VEL_GIRO_MAX = 0.8f; // cm/s: diferencial maximo que pide el control de angulo
+const float VEL_GIRO_MAX = 2.0f; // cm/s: diferencial maximo que pide el control de angulo
 
 
 
@@ -145,6 +145,8 @@ extern QuickPID pidAngulo;
 //funciones
 
 float wrap180(float ang);
+
+
 
 void setup_rtos();
 
