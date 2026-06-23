@@ -1,9 +1,21 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <VL53L1X.h>
 #include <Sensores.h>
 #include "Adafruit_ICM20948.h"
 #include "Adafruit_Sensor.h"
 #include "../Debug_mode.h"
+
+// AQUÍ DAMOS LOS VALORES REALES A LAS VARIABLES GLOBALES
+const uint8_t NUM_SENSORES = 3;
+const float   umbral_de_distancia = 5;  // 50 mm
+const uint8_t pines_xshut[3] = {25, 26, 27};
+const uint8_t direcciones[3] = {0x30, 0x31, 0x32};
+
+VL53L1X sensores[3]; // Lo dejamos en 3 estático
+
+// Objeto global UNICO de la IMU 
+Adafruit_ICM20948 icm;
 
 // Objeto global UNICO de la IMU (el de calibracion_imu.cpp es 'static')
 Adafruit_ICM20948 icm;
@@ -34,12 +46,12 @@ static float wrap180_imu(float ang) {
 }
 
 
-void setup_imu() {
+void setup_i2c() {
   // Wire.begin(SDA, SCL) -> el primer argumento es SDA (pin_serial_Data = 21)
   Wire.begin(pin_serial_Data, pin_serial_clk); // SDA=21, SCL=22
   Wire.setClock(clock_sensor);
   delay(100);
-
+  DEBUG_PRINTLN("Inicializando IMU");
   if (!icm.begin_I2C(0x68, &Wire)) {
     DEBUG_PRINTLN("[ERROR] IMU no detectado. Probaré con la direccion alternativa 0x69....");
 
@@ -54,10 +66,6 @@ void setup_imu() {
   // Rango del acelerometro: ±4 g
   icm.setAccelRange(ICM20948_ACCEL_RANGE_4_G);
 
-  // ────────────────────────────────────────────────────────────
-  // CALIBRACION DEL OFFSET ESTATICO (gyro Z y accel X)
-  // El robot debe estar COMPLETAMENTE INMOVIL durante esto.
-  // ────────────────────────────────────────────────────────────
   DEBUG_PRINTLN("CALIBRANDO IMU: manten el robot INMOVIL...");
 
   double acc_gyroZ  = 0.0; // double para mayor precision en la suma
@@ -85,6 +93,41 @@ void setup_imu() {
   DEBUG_PRINTLN("Calibracion IMU lista.");
   DEBUG_PRINTF("Offset Gyro Z: %.6f rad/s (%.4f dps) | Offset Accel X: %.4f m/s2\n",
                gyroOffsetZ, gyroOffsetZ * 180.0f / PI, accelOffsetX);
+
+ DEBUG_PRINTLN("Inicializando sensores");
+  for (uint8_t i = 0; i < NUM_SENSORES; i++)
+    {
+      pinMode(pines_xshut[i], OUTPUT);
+      digitalWrite(pines_xshut[i], LOW);
+    }
+    delay(10);
+    // Encender e inicializar los sensores de a uno, asignando direcciones unicas
+    for (uint8_t i = 0; i < NUM_SENSORES; i++)
+    {
+      digitalWrite(pines_xshut[i], HIGH); // Encender solo este sensor
+      delay(10);
+
+      sensores[i].setTimeout(500);
+      if (!sensores[i].init())
+      {
+        Serial.print("No se detecto el sensor ");
+        Serial.print(i + 1);
+        Serial.println(". Revisa las conexiones.");
+        while (1)
+        {
+          delay(1000);
+        }
+      }
+
+      sensores[i].setAddress(direcciones[i]); // Direccion unica para este sensor
+
+      // Modo de corto alcance y medicion continua cada 50 ms
+      sensores[i].setDistanceMode(VL53L1X::Short);
+      sensores[i].setMeasurementTimingBudget(50000);
+      sensores[i].startContinuous(50);
+    }
+
+    Serial.println("Sensores VL53L1X iniciados correctamente.");
 }
 
 
