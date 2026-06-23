@@ -32,13 +32,13 @@
 
 // ------------------------CONSTANTES PID PID------------------------------------
 // MOTOR DERECHO
-constexpr float Kp_motor_derecho = 3.0f; 
-constexpr float Ki_motor_derecho  = 0.3f; 
-constexpr float Kd_motor_derecho  = 0.01f; 
+constexpr float Kp_motor_derecho = 2.0f; 
+constexpr float Ki_motor_derecho  = 1.5f; 
+constexpr float Kd_motor_derecho  = 0.1f; 
 // MOTOR izquierdo (Hay que tunearlo )
-constexpr float Kp_motor_izquierdo = 3.0f; 
-constexpr float Ki_motor_izquierdo  = 0.3f; 
-constexpr float Kd_motor_izquierdo  = 0.01f; 
+constexpr float Kp_motor_izquierdo = 2.0f; 
+constexpr float Ki_motor_izquierdo  = 1.5f; 
+constexpr float Kd_motor_izquierdo  = 0.1f; 
 // Controlador de angulo (Hay que tunearlo)
 constexpr float Kp_theta = 0.5f; 
 constexpr float Ki_theta  = 0.1f; 

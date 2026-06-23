@@ -8,7 +8,7 @@
 
 #define pin_serial_Data  21
 #define pin_serial_clk 22
-
+#define NUM_SENSORES 
 #define clock_sensor 100000
 
 
@@ -18,6 +18,7 @@
 
 void setup_sensores();
 void loop_sensores();
+void setup_i2c();
 // ── Paquete de datos crudos/procesados que entrega la IMU ────
 struct DatosImu {
   float omega_dps;   // velocidad angular Z (con signo de la convencion) [grados/s]

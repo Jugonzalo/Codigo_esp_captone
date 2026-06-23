@@ -37,9 +37,14 @@ void motorizquierdoSwitchTask(void *pvParameters){
 //---------------- CONTROL VELOCIDAD----------------
 //PID
 void pidMotorIzqTask(void *pvparameters){
+
     float velocidad_actual = 0.0f;
-    float v_ramp_ref       = 0.0f;
-    int   duty              = 0;
+    float v_out = 0.0f;
+    float v_ref_suavizada = 0.0f;
+    const float alpha = 0.1f;
+    float v_ref_nueva;
+
+    int   duty   = 0;
 
     pidIzq.SetOutputLimits(LIMITE_NEGATIVO_PID_MOTOR, LIMITE_POSITIVO_PID_MOTOR);
     pidIzq.SetSampleTimeUs(FRECUENCIA_ENCODER * 1000.0f); // dt real del dato
@@ -49,15 +54,18 @@ void pidMotorIzqTask(void *pvparameters){
         // Bloquea hasta que hay una lectura NUEVA del encoder
         xQueueReceive(ColaUsoVelIzq, &velocidad_actual, portMAX_DELAY);
         // v_ref es asincrono: tomo el ultimo valor sin bloquear
-        xQueuePeek(ColaUsoVREFIzq, &v_ramp_ref, 0);
+        xQueuePeek(ColaUsoVREFIzq, &v_ref_nueva, 0);
+        
+        //v_ref_suavizada = alpha * v_ref_nueva + (1.0f - alpha) * v_ref_suavizada;
+
 
         abs_velocidad_actual_izq = abs(velocidad_actual);
-        abs_velocidad_ref_izq    = abs(v_ramp_ref);
+        abs_velocidad_ref_izq    = abs(v_ref_nueva);
 
         pidIzq.Compute();
 
         int duty_magnitud = calcularDuty(abs_velocidad_ref_izq, v_out_izq, M1_m, M1_b, M1_MIN_DUTY);
-        duty = (v_ramp_ref < 0) ? -duty_magnitud : duty_magnitud;
+        duty = (v_ref_nueva < 0) ? -duty_magnitud : duty_magnitud;
 
         xQueueSend(ColaUsoDutyIzq, &duty, 0);
         xQueueOverwrite(ColaLectorDutyIzq, &duty); // antes mandaba v_out, corregido
@@ -68,6 +76,7 @@ void pidMotorDerTask(void *pvparameters){
     float v_ramp_ref       = 0.0f;
     int   duty              = 0;
 
+
     pidDer.SetOutputLimits(LIMITE_NEGATIVO_PID_MOTOR, LIMITE_POSITIVO_PID_MOTOR);
     pidDer.SetSampleTimeUs(FRECUENCIA_ENCODER * 1000);
     pidDer.SetMode(QuickPID::Control::timer);
@@ -76,6 +85,8 @@ void pidMotorDerTask(void *pvparameters){
         xQueueReceive(ColaUsoVelDer, &velocidad_actual, portMAX_DELAY);
         xQueuePeek(ColaUsoVREFDer, &v_ramp_ref, 0);
 
+        //Podria intentar escalonar el ref
+        // casos raros   20 + 15 = 10  //   -40 - 35 
         abs_velocidad_actual_der = abs(velocidad_actual);
         abs_velocidad_ref_der    = abs(v_ramp_ref);
 
@@ -108,7 +119,7 @@ void pidControlDireccionAngularTask(void *pvParameters){
     for (;;){
         // LEO REFERENCIA, MEDIDA Y VELOCIDAD DE AVANCE
         xQueuePeek(ColaUsoTetaRef,   &teta_ref ,0);
-        xQueueReceive(ColaUsoTeta,    &teta_actual, portMAX_DELAY);
+        xQueueReceive(ColaUsoTeta,    &teta_med, portMAX_DELAY);
         xQueuePeek(ColaUsoVREFTotal, &velocidad_total,0);
         
 
@@ -117,8 +128,8 @@ void pidControlDireccionAngularTask(void *pvParameters){
 
 
         //Voy a dejar la parte del wrap en comentado por ahora
-        //error = wrap180(teta_ref - teta_med);
-        //teta_actual = teta_ref - error;  // => (teta_ref - teta_actual) = error
+        error = wrap180(teta_ref - teta_med);
+        teta_actual = teta_ref - error;  // => (teta_ref - teta_actual) = error
 
         pidAngulo.Compute();
 
@@ -127,8 +138,10 @@ void pidControlDireccionAngularTask(void *pvParameters){
         if (fabs(v_angular) < 0.1){v_angular = 0.0f;} //Para que no oscile por tonteras
 
         //Los transformo a velocidad de cada rueda
-        v_der_out = (2.0 * velocidad_total - v_angular * LARGO_ENTRE_RUEDAS) / 2.0;
-        v_izq_out =  velocidad_total * 2.0 - v_der_out;
+        v_der_out =  velocidad_total  -( v_angular * LARGO_ENTRE_RUEDAS)/ 2.0f ;
+        
+        v_izq_out = 2.0 * velocidad_total - v_der_out;
+
         
         
         xQueueOverwrite(ColaUsoVREFIzq, &v_izq_out);
