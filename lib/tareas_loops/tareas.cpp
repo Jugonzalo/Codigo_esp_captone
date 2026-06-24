@@ -3,6 +3,7 @@
 #include <conexion_jetson.h>
 #include <tareas.h>
 #include <string.h>
+#include <math.h>
 
 
 // ------------- SWITCH MOTORES ----------------
@@ -153,6 +154,9 @@ void pidControlDireccionAngularTask(void *pvParameters){
 }
 
 
+
+// --------------- CONTROL DE POSCICION ------------------
+
 // -----------------LECTURA DE SENSORES----------------
 //ENCODERS
 void lecturaEncoders(void *pvparaameters){
@@ -249,7 +253,7 @@ void lecturaImuTask(void *pvparameters){
 }
 
 //Sensores de poscicion
-void lecturaPosicionTask(void *pvParameters){
+void SensoresPosicionTask(void *pvParameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_LECTURA);
 }
@@ -257,8 +261,44 @@ void lecturaPosicionTask(void *pvParameters){
 //Estimador de poscicion
 void estimadorDePoscicionTask(void *pvParameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
+    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_ENCODER); 
+    float v_der;
+    float v_izq;
+    float v_total;
+    float theta = 0.0f;
+    float delta_x;
+    float delta_y;
+    float x_out = 0.0f;
+    float y_out = 0.0f;
+
+    Coordenadas pos;
+
     for (;;){
-        // -- LENAR --
+        // Se leen las velocidades 
+        // === Falta pensar bien si el filtro hacerlo aca, en la imu o donde ====
+        xQueuePeek(ColaLectorVelDer, &v_der, 0);
+        xQueuePeek(ColaLectorVelIzq, &v_izq, 0);
+        xQueuePeek(ColaLecturaTeta, &theta, 0);
+
+        v_total = (v_der + v_izq) / 2.0f ;
+        theta = theta * (M_PI / 180.0f); // Lo paso a rad/s
+        delta_x = (v_total) * cosf(theta) * (FRECUENCIA_ENCODER / 1000.0f); //ACA HAY QUE PONER LA FRECUENCIA A LA QUE SE CALCULO LA VELOCIDAD, HAY QUE ANDAR FIJANDOSE.
+        delta_y = (v_total) * sinf(theta) * (FRECUENCIA_ENCODER);
+
+        x_out = x_out + delta_x;
+        
+        y_out = y_out + delta_y;
+
+        pos.x = x_out;
+        pos.y = y_out;
+
+
+        xQueueSend(ColaUsoPosicion, &pos, 0);
+        xQueueOverwrite(ColaLecturaPosicion, &pos);
+
+        
+
+        vTaskDelayUntil(&xLastWakeTime, xfrec);
     }
 }
 //  ----------------ENVIO DE DATOS A JETSON ----------------
@@ -269,6 +309,7 @@ void enviarJetsonTask(void *pvParameters){
     Envio data;
     memset(&data, 0, sizeof(data)); //inicio todos en 0
     data.header = 0xAA;  // asigno el header
+    Coordenadas pos;
  
     for (;;){
 
@@ -294,6 +335,9 @@ void enviarJetsonTask(void *pvParameters){
         xQueuePeek(ColaLecturaRampaIzq, &data.v_izq_ref, 0);
         xQueuePeek(ColaLecturaRampaDer, &data.v_der_ref, 0);
         //-----------------------VTOTAL-----------------------
+        xQueuePeek(ColaLecturaPosicion, &pos, 0);
+        data.x_pos = pos.x;
+        data.y_pos = pos.y;
 
         //-----------------------VTOTAL REF-----------------------
 
@@ -411,6 +455,9 @@ void setup_rtos() {
     ColaLecturaVelAng= xQueueCreate(1, sizeof(float));
 
 
+    // ------------------ Colas Poscicion Cartesiana ------------
+    ColaUsoPosicion = xQueueCreate(1, sizeof(Coordenadas));
+    ColaLecturaPosicion = xQueueCreate(1, sizeof(Coordenadas));
 
 
     ESP32Encoder::useInternalWeakPullResistors = puType::up;
@@ -464,22 +511,25 @@ void setup_rtos() {
     
     xTaskCreatePinnedToCore(leerJetsonTaks,  "leerdatos", 2048,  NULL, 4, NULL, 0);
 
-    // CONTROLADOR
-    //xTaskCreatePinnedToCore(pasar_rampa_izq_task,  "rampaizq",4096,  NULL, 3, NULL, 1);   ESTA DANDO MUCHOS PROBELMAS LA RAMPA, LA bypaseare
+    //===== CONTROLADORES=====
     //MOTOR
     xTaskCreatePinnedToCore(pidMotorIzqTask,  "pidizq",4096,  NULL, 5, NULL, 1);
     xTaskCreatePinnedToCore(pidMotorDerTask,  "pidder",4096,  NULL, 4, NULL, 1);
 
     //ANGULO
-    //Pid
     xTaskCreatePinnedToCore(pidControlDireccionAngularTask,  "pid_ang",4096,  NULL, 6, NULL, 1);
-    //conversor
-    //xTaskCreatePinnedToCore(asignacionVelocidadRuedasTask,  "Conversor",4096,  NULL, 5, NULL, 1);
+
+    //Poscicion
+
+
+
+    //===== LECTURAS =====
 
     //ENCODER
     xTaskCreatePinnedToCore(lecturaEncoders,  "encizq",4096,  NULL, 7, NULL, 1);
-    ///xTaskCreatePinnedToCore(lecturaEncoderIzqTask,  "encizq",3072,  NULL, 7, NULL, 1);
-    //xTaskCreatePinnedToCore(lecturaEncoderDerTask,  "encder",3072,  NULL, 8, NULL, 1);
+
+    //ESTIMACION POSCICION
+    xTaskCreatePinnedToCore(estimadorDePoscicionTask, "est_pos", 2048,NULL, 6, NULL , 1);
 
 
 }
@@ -503,36 +553,3 @@ void setup_rtos() {
 
 
 
-//Rampas
-void pasar_rampa_izq_task(void *pvParameters){
-
-
-
-
-    float vref = 0;
-    float vRampa = 0;
-    float dt = FRECUENCIA_ENCODER / 1000.0f;
-    for (;;){
-        if (xQueueReceive(ColaUsoVREFIzq, &vref,portMAX_DELAY) == pdTRUE){
-            aplicarRampa(vref, vRampa, dt);
-
-            xQueueOverwrite(ColaLecturaRampaIzq, &vref);
-        }
-    }
-}
-void pasar_rampa_der_task(void *pvParameters){
-
-
-
-
-    float vref = 0;
-    float vRampa = 0;
-    float dt = FRECUENCIA_ENCODER / 1000.0f;
-    for (;;){
-        if (xQueueReceive(ColaUsoVREFDer, &vref,portMAX_DELAY) == pdTRUE){
-            aplicarRampa(vref, vRampa, dt);
-
-            xQueueOverwrite(ColaLecturaRampaDer, &vref);
-        }
-    }
-}

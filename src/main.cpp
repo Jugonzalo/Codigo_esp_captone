@@ -14,7 +14,7 @@ void setup() {
     Serial.begin(115200);
   }
 
-  setup_i2c();
+
   motorSetup();    // Inicializa motores y canales PWM
   //firebaseSetup(); // Conecta WiFi e inicializa Firebase
   setup_jetson();   // Configura la comunicación serial con Jetson
@@ -37,6 +37,7 @@ void loop() {
     //cambiar_velocidad_derecha(velocidad_derecha_global);
     //cambiar_velocidad_izquierda(velocidad_izquierda_global);
     vTaskDelete(NULL);  // DEJA SOLO ESTA PRENDIDA SI QUIERES USAR EL RTOS
+    
 
   }
 

@@ -83,13 +83,6 @@ QuickPID pidDer(
     QuickPID::iAwMode::iAwCondition, QuickPID::Action::direct
 );
 
-
-    // VARIABLES PID
-float teta_actual = 0.0f;  // entrada del PID (medida "desenrollada")
-float teta_ref    = 0.0f;  // referencia
-float v_diff      = 0.0f;  // salida: diferencial de velocidad [m/s]
-
-    // SETEO EL PID
 QuickPID pidAngulo(
         &teta_actual, &v_diff, &teta_ref,
         Kp_theta, Ki_theta, Kd_theta,
@@ -98,6 +91,14 @@ QuickPID pidAngulo(
         QuickPID::iAwMode::iAwCondition,
         QuickPID::Action::direct
     );
+
+
+    // VARIABLES PID
+float teta_actual = 0.0f;  // entrada del PID (medida "desenrollada")
+float teta_ref    = 0.0f;  // referencia
+float v_diff      = 0.0f;  // salida: diferencial de velocidad [m/s]
+
+
 
     // PARAMETROS
 

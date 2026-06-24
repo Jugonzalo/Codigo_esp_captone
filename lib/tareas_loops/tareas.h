@@ -14,6 +14,7 @@
 #define FRECUENCIA_IMU 10
 #define FRECUENCIA_ENCODER 5 // en MiliSeg, 1 es 1kz y 1000 es 1hz 
 #define FRECUENCIA_CONTROL_ANGULO 10
+#define FRECUENCIA_ESTIMADOR 10 
 
 #define LIMITE_POSITIVO_PID_MOTOR 200
 #define LIMITE_NEGATIVO_PID_MOTOR -200
@@ -115,6 +116,11 @@ struct __attribute__((packed)) Lectura {
   float v_total_ref;
   float x_ref;
   float y_ref;
+};
+
+struct __attribute__((packed)) Coordenadas {
+    float x;
+    float y;
 };
 
 // --------ENCODERS ----------
