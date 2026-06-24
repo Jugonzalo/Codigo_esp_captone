@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <ESP32Encoder.h>
 #include <QuickPID.h>
+#include <VL53L1X.h>
 
 
 
@@ -51,6 +52,9 @@ constexpr float Kd_posicion  = 0.1f;
 
 
 const float VEL_GIRO_MAX = 2.0f; // cm/s: diferencial maximo que pide el control de angulo
+
+
+const float V_TOTAL_MAX = 40.0f; // cm/s 
 
 
 
@@ -123,6 +127,14 @@ struct __attribute__((packed)) Coordenadas {
     float y;
 };
 
+
+struct __attribute__((packed)) Sensores_distancia {
+  float izquierda;
+  float derecha;
+  float adelante;
+};
+
+
 // --------ENCODERS ----------
 
 extern ESP32Encoder encoderDer;
@@ -138,6 +150,7 @@ extern QueueHandle_t ColaUsoVREFTotal, ColaLecturaVREFTotal;
 extern QueueHandle_t ColaUsoTeta, ColaLecturaTeta, ColaUsoTetaRef, ColaLecturaTetaRef;
 extern QueueHandle_t ColaUsoVelAng, ColaLecturaVelAng;
 extern QueueHandle_t ColaUsoPosicion, ColaLecturaPosicion, ColaUsoPosicionRef, ColaLecturaPosicionRef;
+extern QueueHandle_t ColaLecturaSensores;
 
 // ---------------------PID VELOCIDAD---------------------
 extern float abs_velocidad_actual_izq, v_out_izq, abs_velocidad_ref_izq;
@@ -146,7 +159,8 @@ extern float abs_velocidad_actual_der, v_out_der, abs_velocidad_ref_der;
 extern QuickPID pidDer;
 extern float teta_actual, teta_ref, v_diff;
 extern QuickPID pidAngulo;
-
+extern QuickPID pidPosicion;
+extern float v_total_out , delta_d;
 
 //funciones
 
@@ -165,6 +179,7 @@ void motorizquierdoSwitchTask(void *pvParameters);
 void enviarJetsonTask(void *pvParameters);
 void leerJetsonTaks(void *pvParameters);
 void lecturaImuTask(void *pvparameters);
+void pidPosiciontask(void *pvparameters);
 
 // ESTIMADOR, CASCADA Y RUTINA
 void estimadorDePoscicionTask(void *pvParameters);

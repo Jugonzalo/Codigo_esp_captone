@@ -7,8 +7,6 @@
 
 
 
-
-int64_t count_anterior = 0;   // acumulado anterior para calcular delta
 void setup() {
   if (DEBUG) {
     Serial.begin(115200);
@@ -17,9 +15,9 @@ void setup() {
 
   motorSetup();    // Inicializa motores y canales PWM
   //firebaseSetup(); // Conecta WiFi e inicializa Firebase
+  setup_i2c(); // Configura los sensores
+  
   setup_jetson();   // Configura la comunicación serial con Jetson
-  //setup_sensores(); // Configura los sensores
-
 
   setup_rtos(); // inicia todas las task
 } 

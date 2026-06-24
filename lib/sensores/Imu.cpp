@@ -2,36 +2,50 @@
 #include <Wire.h>
 #include <Sensores.h>
 #include "Adafruit_ICM20948.h"
-#include "Adafruit_Sensor.h"
+//#include "Adafruit_Sensor.h"
 #include "../Debug_mode.h"
 #include <VL53L1X.h>
 
 //const uint8_t NUM_SENSORES = 3 ;
-const float   umbral_de_distancia = 5;  // 50 mm
 const uint8_t pines_xshut[3] = {25, 26, 27};
 const uint8_t direcciones[3] = {0x30, 0x31, 0x32};
 
-VL53L1X sensores[3]; // Lo dejamos en 3 estático
+// DEFINO LOS SENSORES DE DISTANCIA 
+
+VL53L1X sensor_adelante;
+VL53L1X sensor_izquierda;
+VL53L1X sensor_derecha;
+
+
+
+
+
 // Objeto global UNICO de la IMU (el de calibracion_imu.cpp es 'static')
 Adafruit_ICM20948 icm;
 
 // ── Parametros de calibracion (noise floor) ──────────────────
-static float gyroOffsetZ  = 0.0f;   // bias estatico del giroscopio Z [rad/s]
-static float accelOffsetX = 0.0f;   // bias estatico del acelerometro X [m/s^2]
+float gyroOffsetZ  = 0.0f;   // bias estatico del giroscopio Z [rad/s]
+float accelOffsetX = 0.0f;   // bias estatico del acelerometro X [m/s^2]
 
 // ── Buffers de media movil (ultimas 3 muestras) ──────────────
-static float bufGyroZ[3]  = {0};
-static float bufAccelX[3] = {0};
+float bufGyroZ[3]  = {0};
+float bufAccelX[3] = {0};
 
 // ── Estado del integrador del yaw ────────────────────────────
-static float          yaw_acumulado   = 0.0f;   // [grados] horario+
-static unsigned long  tiempo_anterior = 0;       // para calcular dt
+float          yaw_acumulado   = 0.0f;   // [grados] horario+
+unsigned long  tiempo_anterior = 0;       // para calcular dt
 
-static constexpr int   GYRO_CALIB_SAMPLES = 500;
+constexpr int   GYRO_CALIB_SAMPLES = 500;
 
 // ── Zona muerta para suprimir drift en reposo (anti-drift) ───
 // Si |gyroZ corregido| < este valor, no se integra 
-static constexpr float GYRO_DEADZONE_DPS  = 0.1f; // grados/s
+constexpr float GYRO_DEADZONE_DPS  = 0.1f; // grados/s
+
+
+
+//DEFINICION ORIENTACION POSITIVA IMU
+
+ static float IMU_GYRO_SIGN = -1.0f;
 
 // Normaliza un angulo a (-180, 180] (helper local de este modulo)
 static float wrap180_imu(float ang) {
@@ -40,6 +54,12 @@ static float wrap180_imu(float ang) {
   return ang;
 }
 
+
+
+
+
+
+bool esta_sensores_dist = false;
 
 void setup_i2c() {
   // Wire.begin(SDA, SCL) -> el primer argumento es SDA (pin_serial_Data = 21)
@@ -63,6 +83,8 @@ void setup_i2c() {
 
   DEBUG_PRINTLN("CALIBRANDO IMU: manten el robot INMOVIL...");
 
+
+  //
   double acc_gyroZ  = 0.0; // double para mayor precision en la suma
   double acc_accelX = 0.0;
 
@@ -76,53 +98,121 @@ void setup_i2c() {
     delay(4); // ~250 Hz durante la calibracion
   }
 
+
+
+
+
+
+
   // El offset es el promedio de las muestras (noise floor / bias estatico)
-  gyroOffsetZ  = (float)(acc_gyroZ  / GYRO_CALIB_SAMPLES);
   accelOffsetX = (float)(acc_accelX / GYRO_CALIB_SAMPLES);
 
-  // Inicializar buffers de suavizado y la base de tiempo
+  // Inicializar buffers de suavizado y la base de tiempo en 0
   for (int i = 0; i < 3; i++) { bufGyroZ[i] = 0.0f; bufAccelX[i] = 0.0f; }
   yaw_acumulado   = 0.0f;
-  tiempo_anterior = micros();
+
+
+
 
   DEBUG_PRINTLN("Calibracion IMU lista.");
   DEBUG_PRINTF("Offset Gyro Z: %.6f rad/s (%.4f dps) | Offset Accel X: %.4f m/s2\n",
                gyroOffsetZ, gyroOffsetZ * 180.0f / PI, accelOffsetX);
+
+
+
+// ======================== DISTANCIA =========================
 DEBUG_PRINTLN("Inicializando sensores");
-  for (uint8_t i = 0; i < 3; i++)
-    {
-      pinMode(pines_xshut[i], OUTPUT);
-      digitalWrite(pines_xshut[i], LOW);
-    }
-    delay(10);
-    // Encender e inicializar los sensores de a uno, asignando direcciones unicas
-    for (uint8_t i = 0; i < 3; i++)
-    {
-      digitalWrite(pines_xshut[i], HIGH); // Encender solo este sensor
+
+if (esta_sensores_dist) {
+
+
+     //defino los modos de pines
+      pinMode(pines_xshut[0], OUTPUT);
+      digitalWrite(pines_xshut[0], LOW);
+
+      pinMode(pines_xshut[1], OUTPUT);
+      digitalWrite(pines_xshut[1], LOW);
+
+      pinMode(pines_xshut[2], OUTPUT);
+      digitalWrite(pines_xshut[2], LOW);
+
       delay(10);
 
-      sensores[i].setTimeout(500);
-      if (!sensores[i].init())
-      {
-        Serial.print("No se detecto el sensor ");
-        Serial.print(i + 1);
-        Serial.println(". Revisa las conexiones.");
-        while (1)
-        {
-          delay(1000);
-        }
-      }
+    // Encender e inicializar los sensores de a uno, asignando direcciones unicas
+      digitalWrite(pines_xshut[0], HIGH); // Encender solo este sensor
+      delay(10);
 
-      sensores[i].setAddress(direcciones[i]); // Direccion unica para este sensor
+      sensor_adelante.setTimeout(500);
+
+
+      // SI NO LO PILLA DE AHI VEO QUE HACEMOS
+      if (!sensor_adelante.init()){};
+
+
+      sensor_adelante.setAddress(direcciones[0]); // Direccion unica para este sensor
 
       // Modo de corto alcance y medicion continua cada 50 ms
-      sensores[i].setDistanceMode(VL53L1X::Short);
-      sensores[i].setMeasurementTimingBudget(50000);
-      sensores[i].startContinuous(50);
-    }
+      sensor_adelante.setDistanceMode(VL53L1X::Short);
+      sensor_adelante.setMeasurementTimingBudget(50000);
+      sensor_adelante.startContinuous(50);
 
-    Serial.println("Sensores VL53L1X iniciados correctamente.");
-}
+
+
+      // ===================== SENSOR DERECHA========================== 
+
+      
+
+    // Encender e inicializar los sensores de a uno, asignando direcciones unicas
+      digitalWrite(pines_xshut[1], HIGH); // Encender solo este sensor
+      delay(10);
+
+      sensor_derecha.setTimeout(500);
+
+
+      // SI NO LO PILLA DE AHI VEO QUE HACEMOS
+      if (!sensor_derecha.init()){};
+
+
+      sensor_derecha.setAddress(direcciones[1]); // Direccion unica para este sensor
+
+      // Modo de corto alcance y medicion continua cada 50 ms
+      sensor_derecha.setDistanceMode(VL53L1X::Short);
+      sensor_derecha.setMeasurementTimingBudget(50000);
+      sensor_derecha.startContinuous(50);
+
+
+
+      // =========================== SENSOR IZQUIERDA =====================
+
+            
+
+    // Encender e inicializar los sensores de a uno, asignando direcciones unicas
+      digitalWrite(pines_xshut[2], HIGH); // Encender solo este sensor
+      delay(10);
+
+      sensor_izquierda.setTimeout(500);
+
+
+      // SI NO LO PILLA DE AHI VEO QUE HACEMOS
+      if (!sensor_izquierda.init()){};
+
+
+      sensor_izquierda.setAddress(direcciones[2]); // Direccion unica para este sensor
+
+      // Modo de corto alcance y medicion continua cada 50 ms
+      sensor_izquierda.setDistanceMode(VL53L1X::Short);
+      sensor_izquierda.setMeasurementTimingBudget(50000);
+      sensor_izquierda.startContinuous(50);
+    } 
+  }
+
+
+
+
+
+
+
+
 // Lectura NO bloqueante. Llamar periodicamente desde una tarea.
 void leer_imu(DatosImu &out) {
   sensors_event_t accel, gyro, mag, temp;

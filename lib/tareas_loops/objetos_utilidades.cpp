@@ -62,6 +62,12 @@ QueueHandle_t ColaUsoPosicionRef;
 QueueHandle_t ColaLecturaPosicionRef;
 
 
+//---------------------Colas Sensores de posicion ----------
+
+
+QueueHandle_t ColaLecturaSensores;
+
+
 ESP32Encoder encoderDer;
 ESP32Encoder encoderIzq;
 
@@ -83,6 +89,10 @@ QuickPID pidDer(
     QuickPID::iAwMode::iAwCondition, QuickPID::Action::direct
 );
 
+
+
+float teta_actual = 0.0f, teta_ref = 0.0f,  v_diff = 0.0f; 
+
 QuickPID pidAngulo(
         &teta_actual, &v_diff, &teta_ref,
         Kp_theta, Ki_theta, Kd_theta,
@@ -92,11 +102,18 @@ QuickPID pidAngulo(
         QuickPID::Action::direct
     );
 
+// setpoint = 0: queremos que delta_d llegue a 0
+float v_total_out = 0.0f, delta_d = 0.0f, posicion_setpoint = 0.0f;
+QuickPID pidPosicion(
+        &delta_d, &v_total_out, &posicion_setpoint,
+        Kp_posicion, Ki_posicion, Kd_posicion,
+        QuickPID::pMode::pOnError,
+        QuickPID::dMode::dOnMeas,
+        QuickPID::iAwMode::iAwCondition,
+        QuickPID::Action::direct
+    );
 
-    // VARIABLES PID
-float teta_actual = 0.0f;  // entrada del PID (medida "desenrollada")
-float teta_ref    = 0.0f;  // referencia
-float v_diff      = 0.0f;  // salida: diferencial de velocidad [m/s]
+
 
 
 

@@ -36,7 +36,6 @@ void motorizquierdoSwitchTask(void *pvParameters){
     }
 }
 //---------------- CONTROL VELOCIDAD----------------
-//PID
 void pidMotorIzqTask(void *pvparameters){
 
     float velocidad_actual = 0.0f;
@@ -73,6 +72,7 @@ void pidMotorIzqTask(void *pvparameters){
     }
 }
 void pidMotorDerTask(void *pvparameters){
+
     float velocidad_actual = 0.0f;
     float v_ramp_ref       = 0.0f;
     int   duty              = 0;
@@ -100,6 +100,7 @@ void pidMotorDerTask(void *pvparameters){
         xQueueOverwrite(ColaLectorDutyDer, &duty);
     }
 }
+
 // --------------- CONTROL DE ANGULO ------------------
 // PID
 void pidControlDireccionAngularTask(void *pvParameters){
@@ -119,8 +120,8 @@ void pidControlDireccionAngularTask(void *pvParameters){
     // LOOP
     for (;;){
         // LEO REFERENCIA, MEDIDA Y VELOCIDAD DE AVANCE
-        xQueuePeek(ColaUsoTetaRef,   &teta_ref ,0);
         xQueueReceive(ColaUsoTeta,    &teta_med, portMAX_DELAY);
+        xQueuePeek(ColaUsoTetaRef,   &teta_ref ,0);
         xQueuePeek(ColaUsoVREFTotal, &velocidad_total,0);
         
 
@@ -153,9 +154,57 @@ void pidControlDireccionAngularTask(void *pvParameters){
     }
 }
 
-
-
 // --------------- CONTROL DE POSCICION ------------------
+void pidPosiciontask(void *pvparameters){
+    pidPosicion.SetOutputLimits(-V_TOTAL_MAX, V_TOTAL_MAX);
+    pidPosicion.SetSampleTimeUs(FRECUENCIA_ENCODER * 1000);    // LA FRECUENCIA A LA QUE LE DEBERIAN LLEGAR POSCICIONES NUEVAS
+    pidPosicion.SetMode(QuickPID::Control::timer);
+
+    Coordenadas pos_actual;
+    Coordenadas pos_ref = {0,0};
+    float x_actual = 0.0f;
+    float y_actual = 0.0f;
+    float x_ref = 0.0f; 
+    float y_ref = 0.0f;
+    float delta_x = 0.0f;
+    float delta_y = 0.0f;
+    float theta_out = 0.0f;
+
+
+    for (;;){
+    // Se actualiza por cada pos nueva
+    xQueueReceive(ColaUsoPosicion, &pos_actual, portMAX_DELAY);
+    xQueuePeek(ColaUsoPosicionRef, &pos_ref, 0);
+
+    x_actual = pos_actual.x;
+    y_actual = pos_actual.y;
+    x_ref = pos_ref.x;
+    y_ref = pos_ref.y;
+
+
+    //calculo deltas para trigonometria
+    delta_x = x_ref - x_actual;
+    delta_y = y_ref - y_actual;
+
+    theta_out = atan2f(delta_y, delta_x); // Retorna radiantes entre    PI y -PI
+    theta_out = 2*M_PI + theta_out;
+    if (theta_out < 0){theta_out = 360 + theta_out;}
+
+    // delta D
+    delta_d = sqrtf(delta_x*delta_x + delta_y * delta_y);
+
+
+    // Compara 0 con la distancia faltante.
+    pidPosicion.Compute();
+
+   // xQueueOverwrite(ColaUsoVREFTotal, &v_total_out);
+    //xQueueOverwrite(ColaLecturaVREFTotal, &v_total_out);
+
+    //xQueueOverwrite(ColaUsoTetaRef, &theta_out);
+    //xQueueOverwrite(ColaLecturaTetaRef, &theta_out);
+
+    }
+}
 
 // -----------------LECTURA DE SENSORES----------------
 //ENCODERS
@@ -248,6 +297,7 @@ void lecturaImuTask(void *pvparameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_LECTURA);
 
+    
 
 
 }
@@ -256,6 +306,26 @@ void lecturaImuTask(void *pvparameters){
 void SensoresPosicionTask(void *pvParameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_LECTURA);
+
+    float distancia_izquierda = 0.0f;
+    float distancia_derecha = 0.0f;
+    float distancia_adelante = 0.0f;
+
+    VL53L1X sensor_adelante;
+    VL53L1X sensor_izquierda;
+    VL53L1X sensor_derecha;
+
+    Sensores_distancia sensores; //   VL53L1X sensores[3];
+
+
+    for(;;){
+
+    sensores.izquierda = sensor_adelante.read()/10.0; //distancia en cm
+    sensores.derecha = sensor_izquierda.read()/10.0;
+    sensores.adelante = sensor_derecha.read()/10;
+
+    xQueueOverwrite(ColaLecturaSensores, &sensores);
+    }
 }
 // ---------------CALCULO DE POSCICION---------------
 //Estimador de poscicion
@@ -283,7 +353,7 @@ void estimadorDePoscicionTask(void *pvParameters){
         v_total = (v_der + v_izq) / 2.0f ;
         theta = theta * (M_PI / 180.0f); // Lo paso a rad/s
         delta_x = (v_total) * cosf(theta) * (FRECUENCIA_ENCODER / 1000.0f); //ACA HAY QUE PONER LA FRECUENCIA A LA QUE SE CALCULO LA VELOCIDAD, HAY QUE ANDAR FIJANDOSE.
-        delta_y = (v_total) * sinf(theta) * (FRECUENCIA_ENCODER);
+        delta_y = (v_total) * sinf(theta) * (FRECUENCIA_ENCODER/ 1000.0f);
 
         x_out = x_out + delta_x;
         
@@ -335,14 +405,14 @@ void enviarJetsonTask(void *pvParameters){
         xQueuePeek(ColaLecturaRampaIzq, &data.v_izq_ref, 0);
         xQueuePeek(ColaLecturaRampaDer, &data.v_der_ref, 0);
         //-----------------------VTOTAL-----------------------
-        xQueuePeek(ColaLecturaPosicion, &pos, 0);
-        data.x_pos = pos.x;
-        data.y_pos = pos.y;
+        
 
         //-----------------------VTOTAL REF-----------------------
 
         //-----------------------X Y ESTIMADO-----------------------
-
+        xQueuePeek(ColaLecturaPosicion, &pos, 0);
+        data.x_pos = pos.x;
+        data.y_pos = pos.y;
         //-----------------------X Y REF-----------------------
 
 
@@ -386,7 +456,7 @@ void leerJetsonTaks(void *pvParameters){
             }
 
             // ------------------V_TOTAL_REF Teta_REF----------------
-            if (true) { // FALSE SI NO QUIERES USARLO
+            if (false) { // FALSE SI NO QUIERES USARLO
                 xQueueOverwrite(ColaUsoVREFTotal, &data_leida.v_total_ref);
                 xQueueOverwrite(ColaUsoTetaRef, &data_leida.teta_ref);
             }
@@ -454,10 +524,16 @@ void setup_rtos() {
     ColaUsoVelAng = xQueueCreate(1, sizeof(float));
     ColaLecturaVelAng= xQueueCreate(1, sizeof(float));
 
-
+    // ------------------ Cola Lectura sensores de posicion ------------
+    ColaLecturaSensores = xQueueCreate(1, sizeof(Sensores_distancia));
     // ------------------ Colas Poscicion Cartesiana ------------
     ColaUsoPosicion = xQueueCreate(1, sizeof(Coordenadas));
     ColaLecturaPosicion = xQueueCreate(1, sizeof(Coordenadas));
+    //pos ref
+    ColaUsoPosicionRef = xQueueCreate(1, sizeof(Coordenadas));
+    ColaLecturaPosicionRef = xQueueCreate(1, sizeof(Coordenadas));
+
+
 
 
     ESP32Encoder::useInternalWeakPullResistors = puType::up;
@@ -481,7 +557,7 @@ void setup_rtos() {
     xTaskCreatePinnedToCore(
         motorDerechoSwitchTask, //funcion
         "motordtask", //nombre
-        2048, //habra que analizarlo
+        1536, //habra que analizarlo
         NULL, //parametros
         10, // Prioridad analizar
         NULL, //handel
@@ -490,7 +566,7 @@ void setup_rtos() {
     xTaskCreatePinnedToCore(
         motorizquierdoSwitchTask, //funcion
         "motoritask", //nombre
-        2048, //habra que analizarlo
+        1536, //habra que analizarlo
         NULL, //parametros
         9, // Prioridadanalizar
         NULL, //handel
@@ -501,7 +577,7 @@ void setup_rtos() {
     xTaskCreatePinnedToCore(
       enviarJetsonTask, //funcion
        "enviodatos", //nombre
-        4096, //habra que analizarlo Stack size (Bytes) //creo que esta es la cantidad maxima de data que puede sacar
+        3072, //habra que analizarlo Stack size (Bytes) //creo que esta es la cantidad maxima de data que puede sacar
         NULL, //parametros
     9, // Prioridadanalizar
        NULL, //handel
@@ -513,24 +589,22 @@ void setup_rtos() {
 
     //===== CONTROLADORES=====
     //MOTOR
-    xTaskCreatePinnedToCore(pidMotorIzqTask,  "pidizq",4096,  NULL, 5, NULL, 1);
-    xTaskCreatePinnedToCore(pidMotorDerTask,  "pidder",4096,  NULL, 4, NULL, 1);
+    xTaskCreatePinnedToCore(pidMotorIzqTask,  "pidizq",2048,  NULL, 5, NULL, 1);
+    xTaskCreatePinnedToCore(pidMotorDerTask,  "pidder",2048,  NULL, 4, NULL, 1);
 
     //ANGULO
-    xTaskCreatePinnedToCore(pidControlDireccionAngularTask,  "pid_ang",4096,  NULL, 6, NULL, 1);
+    xTaskCreatePinnedToCore(pidControlDireccionAngularTask,  "pid_ang",2048,  NULL, 6, NULL, 1);
 
     //Poscicion
-
+    //xTaskCreatePinnedToCore(pidPosiciontask, "pidpos", 2048, NULL, 1, NULL, 1);  
 
 
     //===== LECTURAS =====
-
     //ENCODER
-    xTaskCreatePinnedToCore(lecturaEncoders,  "encizq",4096,  NULL, 7, NULL, 1);
+    xTaskCreatePinnedToCore(lecturaEncoders,  "encizq",3072,  NULL, 7, NULL, 1);
 
     //ESTIMACION POSCICION
-    xTaskCreatePinnedToCore(estimadorDePoscicionTask, "est_pos", 2048,NULL, 6, NULL , 1);
-
+    xTaskCreatePinnedToCore(estimadorDePoscicionTask, "est_pos", 3072,NULL, 6, NULL , 1);
 
 }
 
