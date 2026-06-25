@@ -424,9 +424,11 @@ void estimadorDePoscicionTask(void *pvParameters){
     float x_out = 0.0f;
     float y_out = 0.0f;
 
-    bool reset_flag;
+    int reset_flag = 0;
 
     Coordenadas pos;
+
+    Coordenadas pos_ref;
 
     for (;;){
         // Se leen las velocidades 
@@ -434,6 +436,7 @@ void estimadorDePoscicionTask(void *pvParameters){
         xQueuePeek(ColaLectorVelDer, &v_der, 0);
         xQueuePeek(ColaLectorVelIzq, &v_izq, 0);
         xQueuePeek(ColaLecturaTeta, &theta, 0);
+        xQueuePeek(ColaUsoPosicion, &pos_ref, 0);
 
         v_total = (v_der + v_izq) / 2.0f ;
         theta = theta * (M_PI / 180.0f); // Lo paso a rad/s
@@ -441,15 +444,27 @@ void estimadorDePoscicionTask(void *pvParameters){
         delta_y = (v_total) * sinf(theta) * (FRECUENCIA_ENCODER/ 1000.0f);
 
         x_out = x_out + delta_x;
-        
         y_out = y_out + delta_y;
 
 
 
+        //VOY A DEJAR EL RESET SUJETO AL V_IZQ_REF,   ==================== RECUERDA PULIRLO=================
+        xQueuePeek(ColaLecturaVREFIzq, &reset_flag,0);
+        xQueuePeek(ColaLecturaPosicionRef, &pos_ref, 0);
+
         
+
+        if (reset_flag){
+            pos.x = pos_ref.x;
+            pos.y = pos_ref.y;
+        }
+
 
         pos.x = x_out;
         pos.y = y_out;
+
+
+
 
 
         xQueueSend(ColaUsoPosicion, &pos, 0);
@@ -558,6 +573,8 @@ void leerJetsonTaks(void *pvParameters){
                 pos.x = data_leida.x_ref;
                 pos.y =  data_leida.y_ref;
                 xQueueOverwrite(ColaUsoPosicionRef, &pos);
+
+                xQueueOverwrite(ColaLecturaPosicionRef, &pos);
             }
 
             // LIMPIEZA
