@@ -5,7 +5,7 @@
 #include <Adafruit_ICM20X.h>
 #include <Adafruit_Sensor.h>
 #include <VL53L1X.h>
-
+            
 
 
 // DATOS
@@ -29,7 +29,7 @@ extern float accelOffsetX;   // bias estatico del acelerometro X [m/s^2]
 extern Adafruit_ICM20948 icm;
 
 
-extern VL53L1X sensor_izquierda, sensor_izquierda ,sensor_derecha;
+extern VL53L1X sensor_izquierda, sensor_adelante ,sensor_derecha;
 
 
 
@@ -38,17 +38,20 @@ void setup_i2c();
 
 
 
-struct DatosImu {
-  float omega_dps;   // velocidad angular Z (con signo de la convencion) [grados/s]
-  float yaw_deg;     // angulo integrado [grados, (-180,180], horario+]
-  float accel_x;     // aceleracion lineal de avance (eje X) sin bias [cm/s^2]
+
+struct __attribute__((packed)) DatosImu {
+  float vel_angular;
+  float pos_angular;
+  float aceleracion_lineal;
 };
+
+extern DatosImu datosImu;
 
 // IMU (lectura no bloqueante para usar desde una tarea RTOS)
 
 void leer_imu(DatosImu &out);
 
-
+void wrap180_imu();
 
 
 

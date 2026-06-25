@@ -110,8 +110,11 @@ QuickPID pidPosicion(
         QuickPID::pMode::pOnError,
         QuickPID::dMode::dOnMeas,
         QuickPID::iAwMode::iAwCondition,
-        QuickPID::Action::direct
+        QuickPID::Action::reverse 
     );
+
+
+DatosImu datosImu;
 
 
 

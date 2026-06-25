@@ -5,13 +5,19 @@
 #include <ESP32Encoder.h>
 #include <QuickPID.h>
 #include <VL53L1X.h>
+#include <Adafruit_ICM20948.h>
+#include <Adafruit_ICM20X.h>
+#include <Adafruit_Sensor.h>
+
+#include <Sensores.h>
+ 
 
 
 
 // ---------Frecuencias-----------
 
-#define FRECUENCIA_LECTURA 200   //
-#define FRECUENCIA_ENVIO 200
+#define FRECUENCIA_LECTURA 50   //
+#define FRECUENCIA_ENVIO 50
 #define FRECUENCIA_IMU 10
 #define FRECUENCIA_ENCODER 5 // en MiliSeg, 1 es 1kz y 1000 es 1hz 
 #define FRECUENCIA_CONTROL_ANGULO 10
@@ -46,39 +52,32 @@ constexpr float Kp_theta = 0.5f;
 constexpr float Ki_theta  = 0.1f; 
 constexpr float Kd_theta  = 0.05f; 
 // Controldador de poscicion
-constexpr float Kp_posicion = 1.0f; 
-constexpr float Ki_posicion  = 0.5f; 
-constexpr float Kd_posicion  = 0.1f; 
+constexpr float Kp_posicion = 0.009f; 
+constexpr float Ki_posicion  = 0.005f; 
+constexpr float Kd_posicion  = 0.0f; 
 
 
 const float VEL_GIRO_MAX = 2.0f; // cm/s: diferencial maximo que pide el control de angulo
 
 
-const float V_TOTAL_MAX = 40.0f; // cm/s 
+const float V_TOTAL_MAX = 15.0f; // cm/s
+const float UMBRAL_LLEGADA_POS = 2.5f; // cm: radio de aceptacion del target
 
 
 
 
+//  ============= variables IMU ================
 
+extern float gyroOffsetZ;
+extern float accelOffsetX;
 
-
-// ===== Rutina de prueba: cuadrado (4 lados de 50 cm, giro 90 a la derecha) =====
-#define FRECUENCIA_RUTINA 50           // ms (20 Hz)
-const float RUTINA_VEL_AVANCE = 20.0f; // velocidad de avance leve [cm/s]
-const float RUTINA_LADO_CM    = 50.0f; // longitud de cada lado [cm]
-const float RUTINA_GIRO_DEG   = 90.0f; // giro a la derecha (horario, +) [grados]
-const int   RUTINA_NUM_LADOS  = 4;     // numero de lados/giros
-const float RUTINA_TOL_ANG    = 3.0f;  // tolerancia para dar el giro por terminado [grados]
-const int   RUTINA_SETTLE_N   = 8;     // ciclos seguidos dentro de tolerancia (anti-rebote)
-
-
-
+// ============= Constantes IMU ================  
+const float Umbral_deslizamiento = 0.1f ; // Umbral de deslizamiento para la IMU (grados/segundo)
+const float sentido_giro = 1.0f; // Convención de sentido de giro para la IMU (1.0 o -1.0)
 
 
 
 // ===== Ganancias del controlador de angulo (PLACEHOLDERS - sintonizar) =====
-
-
 
 // Constantes 
 
@@ -86,6 +85,11 @@ constexpr float RADIO_DE_RUEDA = 3.5f; // en cm
 constexpr float LARGO_ENTRE_RUEDAS = 18.2f;
 constexpr float PERIMETRO = 7 * 3.14;
 constexpr float CM_POR_PULSO = PERIMETRO / 897;   // EN PROMEDIO LEI 8978 cm por vuelta
+
+
+
+
+
 
 
 // Declaracion de objetos
@@ -133,6 +137,12 @@ struct __attribute__((packed)) Sensores_distancia {
   float derecha;
   float adelante;
 };
+
+
+// IMU
+
+
+extern DatosImu datosImu;
 
 
 // --------ENCODERS ----------

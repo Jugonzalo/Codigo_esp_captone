@@ -15,7 +15,7 @@ void setup() {
 
   motorSetup();    // Inicializa motores y canales PWM
   //firebaseSetup(); // Conecta WiFi e inicializa Firebase
-  setup_i2c(); // Configura los sensores
+  //setup_i2c(); // Configura los sensores
   
   setup_jetson();   // Configura la comunicación serial con Jetson
 

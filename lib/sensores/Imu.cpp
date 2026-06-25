@@ -15,13 +15,16 @@ const uint8_t direcciones[3] = {0x30, 0x31, 0x32};
 VL53L1X sensor_adelante;
 VL53L1X sensor_izquierda;
 VL53L1X sensor_derecha;
-
-
-
-
-
-// Objeto global UNICO de la IMU (el de calibracion_imu.cpp es 'static')
 Adafruit_ICM20948 icm;
+
+//DatosImu datosImu;
+
+
+
+
+
+// CREO EL OBJETO QUE 
+
 
 // ── Parametros de calibracion (noise floor) ──────────────────
 float gyroOffsetZ  = 0.0f;   // bias estatico del giroscopio Z [rad/s]
@@ -37,8 +40,7 @@ unsigned long  tiempo_anterior = 0;       // para calcular dt
 
 constexpr int   GYRO_CALIB_SAMPLES = 500;
 
-// ── Zona muerta para suprimir drift en reposo (anti-drift) ───
-// Si |gyroZ corregido| < este valor, no se integra 
+
 constexpr float GYRO_DEADZONE_DPS  = 0.1f; // grados/s
 
 
@@ -62,11 +64,13 @@ static float wrap180_imu(float ang) {
 bool esta_sensores_dist = false;
 
 void setup_i2c() {
+
   // Wire.begin(SDA, SCL) -> el primer argumento es SDA (pin_serial_Data = 21)
   Wire.begin(pin_serial_Data, pin_serial_clk); // SDA=21, SCL=22
   Wire.setClock(clock_sensor);
   delay(100);
-  DEBUG_PRINTLN("Inicializando IMU");
+
+{DEBUG_PRINTLN("Inicializando IMU");
   if (!icm.begin_I2C(0x68, &Wire)) {
     DEBUG_PRINTLN("[ERROR] IMU no detectado. Probaré con la direccion alternativa 0x69....");
 
@@ -85,15 +89,15 @@ void setup_i2c() {
 
 
   //
-  double acc_gyroZ  = 0.0; // double para mayor precision en la suma
-  double acc_accelX = 0.0;
+  float acc_gyroZ  = 0.0; // double para mayor precision en la suma
+  float acc_accelX = 0.0;
 
   for (int i = 0; i < GYRO_CALIB_SAMPLES; i++) {
     sensors_event_t accel, gyro, mag, temp;
     icm.getEvent(&accel, &gyro, &temp, &mag);
 
-    acc_gyroZ  += (double)gyro.gyro.z;          // [rad/s]
-    acc_accelX += (double)accel.acceleration.x; // [m/s^2]
+    acc_gyroZ  += (float)gyro.gyro.z;          // [rad/s]   // REVUSAR ESTI
+    acc_accelX += (float)(accel.acceleration.x / 100); // [cm/s^2]   //Aceleracion lineal
 
     delay(4); // ~250 Hz durante la calibracion
   }
@@ -115,18 +119,15 @@ void setup_i2c() {
 
 
   DEBUG_PRINTLN("Calibracion IMU lista.");
-  DEBUG_PRINTF("Offset Gyro Z: %.6f rad/s (%.4f dps) | Offset Accel X: %.4f m/s2\n",
-               gyroOffsetZ, gyroOffsetZ * 180.0f / PI, accelOffsetX);
-
-
-
-// ======================== DISTANCIA =========================
-DEBUG_PRINTLN("Inicializando sensores");
-
-if (esta_sensores_dist) {
-
+  DEBUG_PRINTF("Offset Gyro Z: %.6f rad/s (%.4f grados/s) | Offset Accel X: %.4f m/s2\n",
+               gyroOffsetZ, gyroOffsetZ * 180.0f / PI, accelOffsetX);}
+              
+{DEBUG_PRINTLN("Inicializando sensores");
 
      //defino los modos de pines
+     
+
+      if (esta_sensores_dist) {
       pinMode(pines_xshut[0], OUTPUT);
       digitalWrite(pines_xshut[0], LOW);
 
@@ -146,7 +147,9 @@ if (esta_sensores_dist) {
 
 
       // SI NO LO PILLA DE AHI VEO QUE HACEMOS
-      if (!sensor_adelante.init()){};
+      if (!sensor_adelante.init()){
+        DEBUG_PRINT("Fallo inicializar sensor adelante");
+      };
 
 
       sensor_adelante.setAddress(direcciones[0]); // Direccion unica para este sensor
@@ -159,9 +162,6 @@ if (esta_sensores_dist) {
 
 
       // ===================== SENSOR DERECHA========================== 
-
-      
-
     // Encender e inicializar los sensores de a uno, asignando direcciones unicas
       digitalWrite(pines_xshut[1], HIGH); // Encender solo este sensor
       delay(10);
@@ -170,7 +170,11 @@ if (esta_sensores_dist) {
 
 
       // SI NO LO PILLA DE AHI VEO QUE HACEMOS
-      if (!sensor_derecha.init()){};
+      if (!sensor_derecha.init()){
+
+        DEBUG_PRINT("Fallo al inicializar sensor derecha ");
+
+      };    
 
 
       sensor_derecha.setAddress(direcciones[1]); // Direccion unica para este sensor
@@ -194,7 +198,9 @@ if (esta_sensores_dist) {
 
 
       // SI NO LO PILLA DE AHI VEO QUE HACEMOS
-      if (!sensor_izquierda.init()){};
+      if (!sensor_izquierda.init()){
+        DEBUG_PRINT("Fallo al inicializar sensor izquierdo");
+      };
 
 
       sensor_izquierda.setAddress(direcciones[2]); // Direccion unica para este sensor
@@ -203,7 +209,7 @@ if (esta_sensores_dist) {
       sensor_izquierda.setDistanceMode(VL53L1X::Short);
       sensor_izquierda.setMeasurementTimingBudget(50000);
       sensor_izquierda.startContinuous(50);
-    } 
+    } }
   }
 
 
@@ -213,8 +219,27 @@ if (esta_sensores_dist) {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ======================== DISTANCIA =========================
+
+
 // Lectura NO bloqueante. Llamar periodicamente desde una tarea.
 void leer_imu(DatosImu &out) {
+
+
+
   sensors_event_t accel, gyro, mag, temp;
   icm.getEvent(&accel, &gyro, &temp, &mag);
 
@@ -225,9 +250,9 @@ void leer_imu(DatosImu &out) {
 
   // Guardia de seguridad: dt invalido -> devolvemos el ultimo estado sin integrar
   if (dt <= 0.0001f || dt > 0.5f) {
-    out.omega_dps = 0.0f;
-    out.yaw_deg   = yaw_acumulado;
-    out.accel_x   = 0.0f;
+    out.vel_angular = 0.0f;
+    out.pos_angular   = yaw_acumulado;
+    out.aceleracion_lineal   = 0.0f;
     return;
   }
 
@@ -252,7 +277,7 @@ void leer_imu(DatosImu &out) {
   yaw_acumulado = wrap180_imu(yaw_acumulado);
 
   // ── 6. Salidas ───────────────────────────────────────────────
-  out.omega_dps = gyroZ_dps;
-  out.yaw_deg   = yaw_acumulado;
-  out.accel_x   = ax * 100.0f; // m/s^2 -> cm/s^2 (unidades del proyecto)
+  out.vel_angular = gyroZ_dps;
+  out.pos_angular   = yaw_acumulado;
+  out.aceleracion_lineal   = ax * 100.0f; //  cm/s^2 
 }

@@ -140,9 +140,9 @@ void pidControlDireccionAngularTask(void *pvParameters){
         if (fabs(v_angular) < 0.1){v_angular = 0.0f;} //Para que no oscile por tonteras
 
         //Los transformo a velocidad de cada rueda
-        v_der_out =  velocidad_total  -( v_angular * LARGO_ENTRE_RUEDAS)/ 2.0f ;
+        v_izq_out =  velocidad_total  -( v_angular * LARGO_ENTRE_RUEDAS)/ 2.0f ;
         
-        v_izq_out = 2.0 * velocidad_total - v_der_out;
+        v_der_out = 2.0 * velocidad_total - v_izq_out;
 
         
         
@@ -169,12 +169,15 @@ void pidPosiciontask(void *pvparameters){
     float delta_x = 0.0f;
     float delta_y = 0.0f;
     float theta_out = 0.0f;
+    float theta_actual = 0.0f;
 
 
     for (;;){
     // Se actualiza por cada pos nueva
     xQueueReceive(ColaUsoPosicion, &pos_actual, portMAX_DELAY);
     xQueuePeek(ColaUsoPosicionRef, &pos_ref, 0);
+    xQueuePeek(ColaLecturaTeta, &theta_actual,0);
+
 
     x_actual = pos_actual.x;
     y_actual = pos_actual.y;
@@ -187,21 +190,48 @@ void pidPosiciontask(void *pvparameters){
     delta_y = y_ref - y_actual;
 
     theta_out = atan2f(delta_y, delta_x); // Retorna radiantes entre    PI y -PI
-    theta_out = 2*M_PI + theta_out;
-    if (theta_out < 0){theta_out = 360 + theta_out;}
+    theta_out = (theta_out * 180.0f) / (M_PI); //se convierte a grados 
+    
+    if (theta_out < 0){theta_out = 360 + theta_out;} // Se pasan a full positivo
 
     // delta D
-    delta_d = sqrtf(delta_x*delta_x + delta_y * delta_y);
+    delta_d = abs(delta_x) + abs(delta_y);
 
 
-    // Compara 0 con la distancia faltante.
-    pidPosicion.Compute();
 
-   // xQueueOverwrite(ColaUsoVREFTotal, &v_total_out);
-    //xQueueOverwrite(ColaLecturaVREFTotal, &v_total_out);
 
-    //xQueueOverwrite(ColaUsoTetaRef, &theta_out);
-    //xQueueOverwrite(ColaLecturaTetaRef, &theta_out);
+        // Sin el delta umbral oscila mucho antes de llegar a la poscicion
+    if (delta_d < UMBRAL_LLEGADA_POS) {
+        // Llegó al target: detener y resetear integral
+        v_total_out = 0.0f;
+        pidPosicion.Reset();
+    } else {
+        pidPosicion.Compute();
+    }
+
+
+    // obligo a que ruede sobre si mismo si es que tiene un angulo muy grande.
+    if (abs(wrap180(theta_out - theta_actual)) > 10) {
+        v_total_out = 0.0f;
+    } else {
+    }
+
+
+
+    // El modo freno de emergencia lanza valores negativos de referencia.
+    if (x_ref < -1 || y_ref < -1){
+        theta_out = theta_actual;
+        pidPosicion.Reset();
+
+
+    }
+
+    xQueueOverwrite(ColaUsoVREFTotal, &v_total_out);
+    xQueueOverwrite(ColaLecturaVREFTotal, &v_total_out);
+
+    xQueueOverwrite(ColaUsoTetaRef, &theta_out);
+    xQueueOverwrite(ColaLecturaTetaRef, &theta_out);
+
 
     }
 }
@@ -259,7 +289,7 @@ void lecturaEncoders(void *pvparaameters){
 
         if (abs(distancia_del_ciclo_izq_filtrada) < 0.001){distancia_ciclo_izq_anterior = 0.0f;}
 
-        vel_angular = (velocidad_leida_izq - velocidad_leida_der)/ LARGO_ENTRE_RUEDAS;
+        vel_angular = (velocidad_leida_der - velocidad_leida_izq)/ LARGO_ENTRE_RUEDAS;
         delta_theta = (vel_angular * (FRECUENCIA_ENCODER / 1000.0f)) * (180.0f / 3.14f);
         theta_calculado = theta_calculado + delta_theta;
         
@@ -284,7 +314,7 @@ void lecturaEncoders(void *pvparaameters){
         xQueueOverwrite(ColaLectorVelDer, &velocidad_leida_der);  // para la lectura
         xQueueOverwrite(ColaUsoVelDer, &velocidad_leida_der);   // para activar el pid
 
-        xQueueSend(ColaUsoTeta, &theta_calculado,0);   // DEMAS QUE AHI  tengo que añadir theta encoder y theta imu
+        xQueueSend(ColaUsoTeta, &theta_calculado,0);   // DEMAS QUE AHI  tengo que añadir theta encoder y theta datosimu
         xQueueOverwrite(ColaLecturaTeta, &theta_calculado);
 
         // DELAY
@@ -296,9 +326,62 @@ void lecturaEncoders(void *pvparaameters){
 void lecturaImuTask(void *pvparameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_LECTURA);
-
     
+    Adafruit_ICM20948 icm;
+    DatosImu datosimu;
+    float yaw_acumulado = 0.0f;
+    float tiempo_anterior = 0.0f;
+    float bufGyroZ[3] = {0.0f, 0.0f, 0.0f};
+    float bufAccelX[3] = {0.0f, 0.0f, 0.0f};
+    float sentido_giro = 1.0f;
 
+
+
+
+    for(;;){
+        sensors_event_t accel, gyro, mag, temp;
+        icm.getEvent(&accel, &gyro, &temp, &mag);
+
+        // ── 1. Calcular dt ───────────────────────────────────────────
+        unsigned long ahora = micros();
+        float dt = (float)(ahora - tiempo_anterior) * 1e-6f; // segundos
+        tiempo_anterior = ahora;
+
+        // Guardia de seguridad: dt invalido -> devolvemos el ultimo estado sin integrar
+        if (dt <= 0.0001f || dt > 0.5f) {
+            datosimu.vel_angular = 0.0f;
+            datosimu.pos_angular   = yaw_acumulado;
+            datosimu.aceleracion_lineal   = 0.0f;
+            return;
+        }
+
+        // Quitar el noise floor (calibracion) ───────────────────
+        float gz = gyro.gyro.z - gyroOffsetZ;             // gyroZ corregido [rad/s]
+        float ax = accel.acceleration.x - accelOffsetX;   // accelX corregido [m/s^2]
+
+        // Media movil de las ultimas 3 muestras ──────
+        bufGyroZ[2]  = bufGyroZ[1];  bufGyroZ[1]  = bufGyroZ[0];  bufGyroZ[0]  = gz;
+        bufAccelX[2] = bufAccelX[1]; bufAccelX[1] = bufAccelX[0]; bufAccelX[0] = ax;
+
+        gz = (bufGyroZ[0]  + bufGyroZ[1]  + bufGyroZ[2])  / 3.0f;
+        ax = (bufAccelX[0] + bufAccelX[1] + bufAccelX[2]) / 3.0f;
+
+        // ── 4. Velocidad angular en grados/s con signo de la convencion ──
+        float gyroZ_dps = sentido_giro * gz * 180.0f / PI; // horario+
+
+        // ── 5. Integracion de Euler con zona muerta anti-drift ───────
+        if (fabsf(gyroZ_dps) > Umbral_deslizamiento) {
+            yaw_acumulado += gyroZ_dps * dt;
+        }
+        yaw_acumulado = wrap180(yaw_acumulado);
+
+        // ── 6. Salidas ───────────────────────────────────────────────
+        datosimu.vel_angular = gyroZ_dps;
+        datosimu.pos_angular   = yaw_acumulado;
+        datosimu.aceleracion_lineal   = ax * 100.0f; //  cm/s^2 
+
+        //xQueueOverwrite(ColaLecturaVelAng, &datosimu.omega_dps);
+}
 
 }
 
@@ -341,11 +424,13 @@ void estimadorDePoscicionTask(void *pvParameters){
     float x_out = 0.0f;
     float y_out = 0.0f;
 
+    bool reset_flag;
+
     Coordenadas pos;
 
     for (;;){
         // Se leen las velocidades 
-        // === Falta pensar bien si el filtro hacerlo aca, en la imu o donde ====
+        // === Falta pensar bien si el filtro hacerlo aca, en la datosimu o donde ====
         xQueuePeek(ColaLectorVelDer, &v_der, 0);
         xQueuePeek(ColaLectorVelIzq, &v_izq, 0);
         xQueuePeek(ColaLecturaTeta, &theta, 0);
@@ -358,6 +443,10 @@ void estimadorDePoscicionTask(void *pvParameters){
         x_out = x_out + delta_x;
         
         y_out = y_out + delta_y;
+
+
+
+        
 
         pos.x = x_out;
         pos.y = y_out;
@@ -405,7 +494,8 @@ void enviarJetsonTask(void *pvParameters){
         xQueuePeek(ColaLecturaRampaIzq, &data.v_izq_ref, 0);
         xQueuePeek(ColaLecturaRampaDer, &data.v_der_ref, 0);
         //-----------------------VTOTAL-----------------------
-        
+        xQueuePeek(ColaLecturaVREFTotal, &data.v_total_ref,0);
+        xQueuePeek(ColaLecturaTetaRef, &data.teta_ref,0);
 
         //-----------------------VTOTAL REF-----------------------
 
@@ -430,6 +520,7 @@ void leerJetsonTaks(void *pvParameters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_LECTURA);
     Lectura data_leida;
+    Coordenadas pos;
     
     for (;;) {
         // Verificamos si hay al menos el tamaño de la estructura en el buffer
@@ -463,7 +554,11 @@ void leerJetsonTaks(void *pvParameters){
             
 
             // ------------------X_REF_Y_REF----------------
-
+            if (true){
+                pos.x = data_leida.x_ref;
+                pos.y =  data_leida.y_ref;
+                xQueueOverwrite(ColaUsoPosicionRef, &pos);
+            }
 
             // LIMPIEZA
             while (Serial.available() > 0) {Serial.read();}}// Descartamos el byte
@@ -596,7 +691,7 @@ void setup_rtos() {
     xTaskCreatePinnedToCore(pidControlDireccionAngularTask,  "pid_ang",2048,  NULL, 6, NULL, 1);
 
     //Poscicion
-    //xTaskCreatePinnedToCore(pidPosiciontask, "pidpos", 2048, NULL, 1, NULL, 1);  
+    xTaskCreatePinnedToCore(pidPosiciontask, "pidpos", 2048, NULL, 1, NULL, 1);  
 
 
     //===== LECTURAS =====
