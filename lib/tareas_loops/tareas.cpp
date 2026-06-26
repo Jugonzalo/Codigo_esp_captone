@@ -546,10 +546,12 @@ void leerJetsonTaks(void *pvParameters){
             if (data_leida.header == 0xAA) {
 
 
+
+
             // ------------------------------MANEJO DE COLAS ------------------------------
 
             //------------------DUTY----------------
-            if (false) { // FALSE SI NO QUIERES USARLO
+            if (Modo_uso == "d") { // FALSE SI NO QUIERES USARLO
             xQueueOverwrite(ColaUsoDutyIzq, &data_leida.duty_izq);   
             xQueueOverwrite(ColaUsoDutyDer, &data_leida.duty_der); 
             }
@@ -564,14 +566,14 @@ void leerJetsonTaks(void *pvParameters){
             xQueueOverwrite(ColaUsoVREFIzq, &data_leida.v_izq_ref);
 
             // ------------------V_TOTAL_REF Teta_REF----------------
-            if (false) { // FALSE SI NO QUIERES USARLO
+            if (Modo_uso == "v") { // FALSE SI NO QUIERES USARLO
                 xQueueOverwrite(ColaUsoVREFTotal, &data_leida.v_total_ref);
                 xQueueOverwrite(ColaUsoTetaRef, &data_leida.teta_ref);
             }
             
 
             // ------------------X_REF_Y_REF----------------
-            if (true){
+            if (Modo_uso == "c"){
                 pos.x = data_leida.x_ref;
                 pos.y =  data_leida.y_ref;
                 xQueueOverwrite(ColaUsoPosicionRef, &pos);
@@ -579,7 +581,7 @@ void leerJetsonTaks(void *pvParameters){
                 xQueueOverwrite(ColaLecturaPosicionRef, &pos);
             }
 
-
+            //pos ref
             xQueueOverwrite(ColaUsoResetPos, &data_leida.reset_pos);
             // LIMPIEZA
             while (Serial.available() > 0) {Serial.read();}}// Descartamos el byte
@@ -703,20 +705,7 @@ void setup_rtos() {
      0 //core
     );
 
-    
     xTaskCreatePinnedToCore(leerJetsonTaks,  "leerdatos", 2048,  NULL, 4, NULL, 0);
-
-    //===== CONTROLADORES=====
-    //MOTOR
-    xTaskCreatePinnedToCore(pidMotorIzqTask,  "pidizq",2048,  NULL, 5, NULL, 1);
-    xTaskCreatePinnedToCore(pidMotorDerTask,  "pidder",2048,  NULL, 4, NULL, 1);
-
-    //ANGULO
-    xTaskCreatePinnedToCore(pidControlDireccionAngularTask,  "pid_ang",2048,  NULL, 6, NULL, 1);
-
-    //Poscicion
-    xTaskCreatePinnedToCore(pidPosiciontask, "pidpos", 2048, NULL, 1, NULL, 1);  
-
 
     //===== LECTURAS =====
     //ENCODER
@@ -724,6 +713,21 @@ void setup_rtos() {
 
     //ESTIMACION POSCICION
     xTaskCreatePinnedToCore(estimadorDePoscicionTask, "est_pos", 3072,NULL, 6, NULL , 1);
+
+    if (Modo_uso == "v" || Modo_uso == "c"){
+    //===== CONTROLADORES=====
+    //MOTOR
+    xTaskCreatePinnedToCore(pidMotorIzqTask,  "pidizq",2048,  NULL, 5, NULL, 1);
+    xTaskCreatePinnedToCore(pidMotorDerTask,  "pidder",2048,  NULL, 4, NULL, 1);
+
+    //ANGULO
+    xTaskCreatePinnedToCore(pidControlDireccionAngularTask,  "pid_ang",2048,  NULL, 6, NULL, 1);
+    }
+    
+    //Poscicion
+    if (Modo_uso == "c") {
+    xTaskCreatePinnedToCore(pidPosiciontask, "pidpos", 2048, NULL, 1, NULL, 1);  
+    }
 
 }
 

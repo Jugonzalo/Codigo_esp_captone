@@ -9,6 +9,7 @@
 #include <Adafruit_ICM20X.h>
 #include <Adafruit_Sensor.h>
 #include <sensores.h>
+#include <conexion_jetson.h>
 
 // ---------Frecuencias-----------
 
@@ -50,14 +51,10 @@ constexpr float Kd_posicion  = 0.0f;
 
 
 
-
-const float V_CADA_RUEDA_MAX = 30.0f; 
-
+// =========== VALORES MAXIMOS ==========
+const float V_CADA_RUEDA_MAX = 200.0f; 
 const float VEL_GIRO_MAX = 2.0f; // cm/s: diferencial maximo que pide el control de angulo
-
-
 const float V_TOTAL_MAX = 15.0f; // cm/s
-
 
 const float UMBRAL_LLEGADA_POS = 2.5f; // cm: radio de aceptacion del target
 

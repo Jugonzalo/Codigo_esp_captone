@@ -1,18 +1,13 @@
 #ifndef CONEXION_JETSON_H
 #define CONEXION_JETSON_H
 
-
-
-extern int velocidad_izquierda_global;
-extern int velocidad_derecha_global;
+#include <Arduino.h>
 
 #define velocidad_serial 115200
 
-
+extern String Modo_uso;
 
 void setup_jetson();
-void enviar_datos_jetson();
-void leer_datos_jetson();
 
 #endif // CONEXION_JETSON_H
 
