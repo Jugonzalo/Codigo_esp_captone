@@ -61,6 +61,10 @@ QueueHandle_t ColaLecturaPosicion;
 QueueHandle_t ColaUsoPosicionRef;
 QueueHandle_t ColaLecturaPosicionRef;
 
+//---------------------Colas Sensores de posicion ----------
+
+QueueHandle_t ColaUsoResetPos;
+
 
 //---------------------Colas Sensores de posicion ----------
 

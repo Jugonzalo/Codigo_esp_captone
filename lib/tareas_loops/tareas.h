@@ -8,23 +8,14 @@
 #include <Adafruit_ICM20948.h>
 #include <Adafruit_ICM20X.h>
 #include <Adafruit_Sensor.h>
-
-#include <Sensores.h>
- 
-
-
+#include <sensores.h>
 
 // ---------Frecuencias-----------
 
 #define FRECUENCIA_LECTURA 50   //
 #define FRECUENCIA_ENVIO 50
-#define FRECUENCIA_IMU 10
 #define FRECUENCIA_ENCODER 5 // en MiliSeg, 1 es 1kz y 1000 es 1hz 
-#define FRECUENCIA_CONTROL_ANGULO 10
-#define FRECUENCIA_ESTIMADOR 10 
 
-#define LIMITE_POSITIVO_PID_MOTOR 200
-#define LIMITE_NEGATIVO_PID_MOTOR -200
 
 // ====== PINES DEL ENCODER ======
 // Motor 1 (Rueda Izquierda)
@@ -57,10 +48,17 @@ constexpr float Ki_posicion  = 0.005f;
 constexpr float Kd_posicion  = 0.0f; 
 
 
+
+
+
+const float V_CADA_RUEDA_MAX = 30.0f; 
+
 const float VEL_GIRO_MAX = 2.0f; // cm/s: diferencial maximo que pide el control de angulo
 
 
 const float V_TOTAL_MAX = 15.0f; // cm/s
+
+
 const float UMBRAL_LLEGADA_POS = 2.5f; // cm: radio de aceptacion del target
 
 
@@ -124,6 +122,7 @@ struct __attribute__((packed)) Lectura {
   float v_total_ref;
   float x_ref;
   float y_ref;
+  float reset_pos;
 };
 
 struct __attribute__((packed)) Coordenadas {
@@ -161,6 +160,7 @@ extern QueueHandle_t ColaUsoTeta, ColaLecturaTeta, ColaUsoTetaRef, ColaLecturaTe
 extern QueueHandle_t ColaUsoVelAng, ColaLecturaVelAng;
 extern QueueHandle_t ColaUsoPosicion, ColaLecturaPosicion, ColaUsoPosicionRef, ColaLecturaPosicionRef;
 extern QueueHandle_t ColaLecturaSensores;
+extern QueueHandle_t ColaUsoResetPos;
 
 // ---------------------PID VELOCIDAD---------------------
 extern float abs_velocidad_actual_izq, v_out_izq, abs_velocidad_ref_izq;

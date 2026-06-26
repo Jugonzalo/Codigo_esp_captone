@@ -1,7 +1,6 @@
 #include "../lib/Debug_mode.h"
 #include "../lib/motor/motor.h"
 #include "../lib/conexion_serial/conexion_jetson.h"
-#include "../lib/sensores/Sensores.h"
 #include "../lib/tareas_loops/tareas.h"
 #include <Arduino.h>
 
@@ -13,12 +12,9 @@ void setup() {
   }
 
 
-  motorSetup();    // Inicializa motores y canales PWM
-  //firebaseSetup(); // Conecta WiFi e inicializa Firebase
   //setup_i2c(); // Configura los sensores
-  
+  motorSetup();    // Inicializa motores y canales PWM
   setup_jetson();   // Configura la comunicación serial con Jetson
-
   setup_rtos(); // inicia todas las task
 } 
 

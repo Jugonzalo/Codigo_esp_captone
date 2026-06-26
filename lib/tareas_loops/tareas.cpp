@@ -46,7 +46,7 @@ void pidMotorIzqTask(void *pvparameters){
 
     int   duty   = 0;
 
-    pidIzq.SetOutputLimits(LIMITE_NEGATIVO_PID_MOTOR, LIMITE_POSITIVO_PID_MOTOR);
+    pidIzq.SetOutputLimits(-V_CADA_RUEDA_MAX, V_CADA_RUEDA_MAX);
     pidIzq.SetSampleTimeUs(FRECUENCIA_ENCODER * 1000.0f); // dt real del dato
     pidIzq.SetMode(QuickPID::Control::timer);
 
@@ -78,7 +78,7 @@ void pidMotorDerTask(void *pvparameters){
     int   duty              = 0;
 
 
-    pidDer.SetOutputLimits(LIMITE_NEGATIVO_PID_MOTOR, LIMITE_POSITIVO_PID_MOTOR);
+    pidDer.SetOutputLimits(-V_CADA_RUEDA_MAX, V_CADA_RUEDA_MAX);
     pidDer.SetSampleTimeUs(FRECUENCIA_ENCODER * 1000);
     pidDer.SetMode(QuickPID::Control::timer);
 
@@ -449,14 +449,14 @@ void estimadorDePoscicionTask(void *pvParameters){
 
 
         //VOY A DEJAR EL RESET SUJETO AL V_IZQ_REF,   ==================== RECUERDA PULIRLO=================
-        xQueuePeek(ColaLecturaVREFIzq, &reset_flag,0);
+        xQueuePeek(ColaUsoResetPos, &reset_flag,0);
         xQueuePeek(ColaLecturaPosicionRef, &pos_ref, 0);
 
         
 
         if (reset_flag){
-            pos.x = pos_ref.x;
-            pos.y = pos_ref.y;
+            x_out = pos_ref.x;
+            y_out = pos_ref.y;
         }
 
 
@@ -561,6 +561,8 @@ void leerJetsonTaks(void *pvParameters){
             xQueueOverwrite(ColaUsoVREFDer, &data_leida.v_der_ref);
             }
 
+            xQueueOverwrite(ColaUsoVREFIzq, &data_leida.v_izq_ref);
+
             // ------------------V_TOTAL_REF Teta_REF----------------
             if (false) { // FALSE SI NO QUIERES USARLO
                 xQueueOverwrite(ColaUsoVREFTotal, &data_leida.v_total_ref);
@@ -577,6 +579,8 @@ void leerJetsonTaks(void *pvParameters){
                 xQueueOverwrite(ColaLecturaPosicionRef, &pos);
             }
 
+
+            xQueueOverwrite(ColaUsoResetPos, &data_leida.reset_pos);
             // LIMPIEZA
             while (Serial.available() > 0) {Serial.read();}}// Descartamos el byte
         else {// Si el header está mal, el buffer está desincronizado // Limpiamos todo
@@ -638,12 +642,15 @@ void setup_rtos() {
 
     // ------------------ Cola Lectura sensores de posicion ------------
     ColaLecturaSensores = xQueueCreate(1, sizeof(Sensores_distancia));
+
     // ------------------ Colas Poscicion Cartesiana ------------
     ColaUsoPosicion = xQueueCreate(1, sizeof(Coordenadas));
     ColaLecturaPosicion = xQueueCreate(1, sizeof(Coordenadas));
     //pos ref
     ColaUsoPosicionRef = xQueueCreate(1, sizeof(Coordenadas));
     ColaLecturaPosicionRef = xQueueCreate(1, sizeof(Coordenadas));
+    //reset pos
+    ColaUsoResetPos = xQueueCreate(1, sizeof(float));
 
 
 
