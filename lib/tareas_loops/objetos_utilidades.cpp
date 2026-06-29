@@ -94,17 +94,18 @@ QuickPID pidDer(
 );
 
 
-
-float teta_actual = 0.0f, teta_ref = 0.0f,  v_diff = 0.0f; 
+float teta_actual = 0.0f, teta_ref = 0.0f,  v_angular = 0.0f; 
 
 QuickPID pidAngulo(
-        &teta_actual, &v_diff, &teta_ref,
+        &teta_actual, &v_angular, &teta_ref,
         Kp_theta, Ki_theta, Kd_theta,
         QuickPID::pMode::pOnError,
         QuickPID::dMode::dOnMeas,
         QuickPID::iAwMode::iAwCondition,
         QuickPID::Action::direct
     );
+
+
 
 // setpoint = 0: queremos que delta_d llegue a 0
 float v_total_out = 0.0f, delta_d = 0.0f, posicion_setpoint = 0.0f;
@@ -114,7 +115,7 @@ QuickPID pidPosicion(
         QuickPID::pMode::pOnError,
         QuickPID::dMode::dOnMeas,
         QuickPID::iAwMode::iAwCondition,
-        QuickPID::Action::reverse 
+        QuickPID::Action::reverse
     );
 
 

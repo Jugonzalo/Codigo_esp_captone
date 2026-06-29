@@ -10,6 +10,7 @@
 #include <Adafruit_Sensor.h>
 #include <sensores.h>
 #include <conexion_jetson.h>
+#include <mat.h>
 
 // ---------Frecuencias-----------
 
@@ -32,31 +33,31 @@
 
 // ------------------------CONSTANTES PID PID------------------------------------
 // MOTOR DERECHO
-constexpr float Kp_motor_derecho = 2.0f; 
-constexpr float Ki_motor_derecho  = 1.5f; 
-constexpr float Kd_motor_derecho  = 0.1f; 
+constexpr float Kp_motor_derecho = 1.6f; 
+constexpr float Ki_motor_derecho  = 1.2f; 
+constexpr float Kd_motor_derecho  = 0.12f; 
 // MOTOR izquierdo (Hay que tunearlo )
 constexpr float Kp_motor_izquierdo = 2.0f; 
 constexpr float Ki_motor_izquierdo  = 1.5f; 
-constexpr float Kd_motor_izquierdo  = 0.1f; 
+constexpr float Kd_motor_izquierdo  = 0.08f; 
 // Controlador de angulo (Hay que tunearlo)
-constexpr float Kp_theta = 0.5f; 
-constexpr float Ki_theta  = 0.1f; 
-constexpr float Kd_theta  = 0.05f; 
+constexpr float Kp_theta = 0.3f; 
+constexpr float Ki_theta  = 0.01f; 
+constexpr float Kd_theta  = 0.03f; 
 // Controldador de poscicion
-constexpr float Kp_posicion = 0.009f; 
-constexpr float Ki_posicion  = 0.005f; 
-constexpr float Kd_posicion  = 0.0f; 
+constexpr float Kp_posicion = 0.00f;
+constexpr float Ki_posicion  = 0.06f;
+constexpr float Kd_posicion  = 0.0f;
 
 
 
 
 // =========== VALORES MAXIMOS ==========
 const float V_CADA_RUEDA_MAX = 200.0f; 
-const float VEL_GIRO_MAX = 2.0f; // cm/s: diferencial maximo que pide el control de angulo
+const float VEL_GIRO_MAX = 1.2f; // cm/s: diferencial maximo que pide el control de angulo
 const float V_TOTAL_MAX = 15.0f; // cm/s
 
-const float UMBRAL_LLEGADA_POS = 2.5f; // cm: radio de aceptacion del target
+const float UMBRAL_LLEGADA_POS = 1.2f; // cm: radio de aceptacion del target
 
 
 
@@ -78,7 +79,7 @@ const float sentido_giro = 1.0f; // Convención de sentido de giro para la IMU (
 
 constexpr float RADIO_DE_RUEDA = 3.5f; // en cm
 constexpr float LARGO_ENTRE_RUEDAS = 18.2f;
-constexpr float PERIMETRO = 7 * 3.14;
+constexpr float PERIMETRO = 7 * M_PI;
 constexpr float CM_POR_PULSO = PERIMETRO / 897;   // EN PROMEDIO LEI 8978 cm por vuelta
 
 
@@ -164,7 +165,7 @@ extern float abs_velocidad_actual_izq, v_out_izq, abs_velocidad_ref_izq;
 extern QuickPID pidIzq;
 extern float abs_velocidad_actual_der, v_out_der, abs_velocidad_ref_der;
 extern QuickPID pidDer;
-extern float teta_actual, teta_ref, v_diff;
+extern float teta_actual, teta_ref, v_angular;
 extern QuickPID pidAngulo;
 extern QuickPID pidPosicion;
 extern float v_total_out , delta_d;

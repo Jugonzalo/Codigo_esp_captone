@@ -112,7 +112,6 @@ void pidControlDireccionAngularTask(void *pvParameters){
 
     float teta_med = 0.0f;
     float v_avance = 0.0f;   // velocidad de avance comun (rutina/secuenciador)
-    float v_angular = 0.0f;
     float error = 0.0f;
     float v_der_out = 0.0f;
     float v_izq_out = 0.0f;
@@ -135,9 +134,13 @@ void pidControlDireccionAngularTask(void *pvParameters){
 
         pidAngulo.Compute();
 
-        v_angular = v_diff;   // Aca lo cambie a v_angular
+        if (abs(error) < 1){
+            v_angular = 0.0f;
+            pidAngulo.Reset();
+            
+        }
 
-        if (fabs(v_angular) < 0.1){v_angular = 0.0f;} //Para que no oscile por tonteras
+
 
         //Los transformo a velocidad de cada rueda
         v_izq_out =  velocidad_total  -( v_angular * LARGO_ENTRE_RUEDAS)/ 2.0f ;
@@ -164,12 +167,14 @@ void pidPosiciontask(void *pvparameters){
     Coordenadas pos_ref = {0,0};
     float x_actual = 0.0f;
     float y_actual = 0.0f;
-    float x_ref = 0.0f; 
+    float x_ref = 0.0f;
     float y_ref = 0.0f;
     float delta_x = 0.0f;
     float delta_y = 0.0f;
     float theta_out = 0.0f;
     float theta_actual = 0.0f;
+
+    float aceleracion = 0.0f;
 
 
     for (;;){
@@ -190,8 +195,8 @@ void pidPosiciontask(void *pvparameters){
     delta_y = y_ref - y_actual;
 
     theta_out = atan2f(delta_y, delta_x); // Retorna radiantes entre    PI y -PI
-    theta_out = (theta_out * 180.0f) / (M_PI); //se convierte a grados 
-    
+    theta_out = (theta_out * 180.0f) / (M_PI); //se convierte a grados
+
     if (theta_out < 0){theta_out = 360 + theta_out;} // Se pasan a full positivo
 
     // delta D
@@ -201,10 +206,15 @@ void pidPosiciontask(void *pvparameters){
 
 
         // Sin el delta umbral oscila mucho antes de llegar a la poscicion
-    if (delta_d < UMBRAL_LLEGADA_POS) {
+    if (delta_x < UMBRAL_LLEGADA_POS && delta_y < UMBRAL_LLEGADA_POS) {
         // Llegó al target: detener y resetear integral
-        v_total_out = 0.0f;
+        
+        pidPosicion.SetOutputSum(0.0);
         pidPosicion.Reset();
+        v_total_out = 0.0f;
+        // Congelar theta_out al angulo actual: con delta_x/y ~0 atan2 es
+        // ruidoso y causaria oscilacion en el PID de angulo.
+        theta_out = theta_actual;
     } else {
         pidPosicion.Compute();
     }
@@ -213,6 +223,83 @@ void pidPosiciontask(void *pvparameters){
     // obligo a que ruede sobre si mismo si es que tiene un angulo muy grande.
     if (abs(wrap180(theta_out - theta_actual)) > 10) {
         v_total_out = 0.0f;
+        pidPosicion.SetOutputSum(0.0);
+        pidPosicion.Reset();
+    } else {
+    }
+
+
+
+
+    xQueueOverwrite(ColaUsoVREFTotal, &v_total_out);
+    xQueueOverwrite(ColaLecturaVREFTotal, &v_total_out);
+
+    xQueueOverwrite(ColaUsoTetaRef, &theta_out);
+    xQueueOverwrite(ColaLecturaTetaRef, &theta_out);
+
+
+    }
+}
+
+
+void pidPosicion2task(void *pvparameters){
+    pidPosicion.SetOutputLimits(-V_TOTAL_MAX, V_TOTAL_MAX);
+    pidPosicion.SetSampleTimeUs(FRECUENCIA_ENCODER * 1000);    // LA FRECUENCIA A LA QUE LE DEBERIAN LLEGAR POSCICIONES NUEVAS
+    pidPosicion.SetMode(QuickPID::Control::timer);
+
+    Coordenadas pos_actual;
+    Coordenadas pos_ref = {0,0};
+    float x_actual = 0.0f;
+    float y_actual = 0.0f;
+    float x_ref = 0.0f;
+    float y_ref = 0.0f;
+    float delta_x = 0.0f;
+    float delta_y = 0.0f;
+    float theta_out = 0.0f;
+    float theta_actual = 0.0f;
+
+    float aceleracion = 0.0f;
+
+
+    for (;;){
+    // Se actualiza por cada pos nueva
+    xQueueReceive(ColaUsoPosicion, &pos_actual, portMAX_DELAY);
+    xQueuePeek(ColaUsoPosicionRef, &pos_ref, 0);
+    xQueuePeek(ColaLecturaTeta, &theta_actual,0);
+
+
+    x_actual = pos_actual.x;
+    y_actual = pos_actual.y;
+    x_ref = pos_ref.x;
+    y_ref = pos_ref.y;
+
+
+    //calculo deltas para trigonometria
+    delta_x = x_ref - x_actual;
+    delta_y = y_ref - y_actual;
+
+    theta_out = atan2f(delta_y, delta_x); // Retorna radiantes entre    PI y -PI
+    theta_out = (theta_out * 180.0f) / (M_PI); //se convierte a grados
+
+    if (theta_out < 0){theta_out = 360 + theta_out;} // Se pasan a full positivo
+
+    // delta D
+    delta_d = abs(delta_x) + abs(delta_y);
+
+
+
+
+    if (delta_d >= 15 && v_total_out <= 15){
+        v_total_out = v_total_out + aceleracion * (FRECUENCIA_ENCODER /1000);
+    }
+    if (delta_d > UMBRAL_LLEGADA_POS){
+    }
+
+    // obligo a que ruede sobre si mismo si es que tiene un angulo muy grande.
+    if (abs(wrap180(theta_out - theta_actual)) > 10) {
+        v_total_out = 0.0f;
+        pidPosicion.SetOutputSum(0.0);
+        pidPosicion.Reset();
     } else {
     }
 
@@ -221,6 +308,7 @@ void pidPosiciontask(void *pvparameters){
     // El modo freno de emergencia lanza valores negativos de referencia.
     if (x_ref < -1 || y_ref < -1){
         theta_out = theta_actual;
+        v_total_out = 0.0;
         pidPosicion.Reset();
 
 
@@ -249,7 +337,7 @@ void lecturaEncoders(void *pvparaameters){
     float distancia_del_ciclo_izq = 0;
     float aceleracion_izq = 0;
     //parametro
-    float alpha = 0.2;
+    float alpha = 0.25f;
     //derecha
     float velocidad_leida_der = 0;
     float velocidad_leida_der_anterior = 0;
@@ -269,7 +357,7 @@ void lecturaEncoders(void *pvparaameters){
         int64_t count_actual_der = encoderDer.getCount();      
         encoderDer.clearCount();
         distancia_del_ciclo_izq = count_actual_izq * CM_POR_PULSO;
-        distancia_del_ciclo_izq_filtrada = alpha * distancia_del_ciclo_izq + (1-alpha) * distancia_ciclo_izq_anterior;
+        distancia_del_ciclo_izq_filtrada = alpha * distancia_del_ciclo_izq + (1.0f -alpha) * distancia_ciclo_izq_anterior;
         distancia_ciclo_izq_anterior = distancia_del_ciclo_izq_filtrada;
 
         velocidad_leida_izq =  distancia_del_ciclo_izq_filtrada * 1000.0f / FRECUENCIA_ENCODER;  //   cm/s
@@ -278,7 +366,7 @@ void lecturaEncoders(void *pvparaameters){
 
 
         distancia_del_ciclo_der = count_actual_der * CM_POR_PULSO;
-        distancia_del_ciclo_der_filtrada = alpha * distancia_del_ciclo_der + (1-alpha) * distancia_ciclo_der_anterior;
+        distancia_del_ciclo_der_filtrada = alpha * distancia_del_ciclo_der + (1.0f-alpha) * distancia_ciclo_der_anterior;
         distancia_ciclo_der_anterior = distancia_del_ciclo_der_filtrada;
 
         velocidad_leida_der =  distancia_del_ciclo_der_filtrada * 1000.0f / FRECUENCIA_ENCODER;  //   cm/s
@@ -290,7 +378,7 @@ void lecturaEncoders(void *pvparaameters){
         if (abs(distancia_del_ciclo_izq_filtrada) < 0.001){distancia_ciclo_izq_anterior = 0.0f;}
 
         vel_angular = (velocidad_leida_der - velocidad_leida_izq)/ LARGO_ENTRE_RUEDAS;
-        delta_theta = (vel_angular * (FRECUENCIA_ENCODER / 1000.0f)) * (180.0f / 3.14f);
+        delta_theta = (vel_angular * (FRECUENCIA_ENCODER / 1000.0f)) * (180.0f / M_PI);
         theta_calculado = theta_calculado + delta_theta;
         
         while (theta_calculado >= 360.0f) {
