@@ -134,7 +134,7 @@ void pidControlDireccionAngularTask(void *pvParameters){
 
         pidAngulo.Compute();
 
-        if (abs(error) < 1){
+        if (abs(error) < 0.1){
             v_angular = 0.0f;
             pidAngulo.Reset();
             
@@ -212,7 +212,6 @@ void pidPosiciontask(void *pvparameters){
         pidPosicion.SetOutputSum(0.0);
         pidPosicion.Reset();
         v_total_out = 0.0f;
-        // Congelar theta_out al angulo actual: con delta_x/y ~0 atan2 es
         // ruidoso y causaria oscilacion en el PID de angulo.
         theta_out = theta_actual;
     } else {
@@ -356,26 +355,35 @@ void lecturaEncoders(void *pvparaameters){
         encoderIzq.clearCount();
         int64_t count_actual_der = encoderDer.getCount();      
         encoderDer.clearCount();
+
+
+
+
         distancia_del_ciclo_izq = count_actual_izq * CM_POR_PULSO;
         distancia_del_ciclo_izq_filtrada = alpha * distancia_del_ciclo_izq + (1.0f -alpha) * distancia_ciclo_izq_anterior;
         distancia_ciclo_izq_anterior = distancia_del_ciclo_izq_filtrada;
+
+
 
         velocidad_leida_izq =  distancia_del_ciclo_izq_filtrada * 1000.0f / FRECUENCIA_ENCODER;  //   cm/s
         aceleracion_izq = velocidad_leida_izq - velocidad_leida_izq_anterior * 1000.0f / FRECUENCIA_ENCODER;
         velocidad_leida_izq_anterior = velocidad_leida_izq;
 
 
+
+
         distancia_del_ciclo_der = count_actual_der * CM_POR_PULSO;
         distancia_del_ciclo_der_filtrada = alpha * distancia_del_ciclo_der + (1.0f-alpha) * distancia_ciclo_der_anterior;
         distancia_ciclo_der_anterior = distancia_del_ciclo_der_filtrada;
+
+
 
         velocidad_leida_der =  distancia_del_ciclo_der_filtrada * 1000.0f / FRECUENCIA_ENCODER;  //   cm/s
         aceleracion_der = (velocidad_leida_der - velocidad_leida_der_anterior)* 1000.0f / FRECUENCIA_ENCODER;
         velocidad_leida_der_anterior  =velocidad_leida_der;
 
-        if (abs(distancia_del_ciclo_der_filtrada) < 0.001){distancia_ciclo_der_anterior = 0.0f;}
 
-        if (abs(distancia_del_ciclo_izq_filtrada) < 0.001){distancia_ciclo_izq_anterior = 0.0f;}
+
 
         vel_angular = (velocidad_leida_der - velocidad_leida_izq)/ LARGO_ENTRE_RUEDAS;
         delta_theta = (vel_angular * (FRECUENCIA_ENCODER / 1000.0f)) * (180.0f / M_PI);
@@ -400,10 +408,12 @@ void lecturaEncoders(void *pvparaameters){
         xQueueSend(ColaUsoVelIzq, &velocidad_leida_izq,0);   // para activar el pid
 
         xQueueOverwrite(ColaLectorVelDer, &velocidad_leida_der);  // para la lectura
-        xQueueOverwrite(ColaUsoVelDer, &velocidad_leida_der);   // para activar el pid
+        xQueueSend(ColaUsoVelDer, &velocidad_leida_der,0);   // para activar el pid
 
         xQueueSend(ColaUsoTeta, &theta_calculado,0);   // DEMAS QUE AHI  tengo que añadir theta encoder y theta datosimu
         xQueueOverwrite(ColaLecturaTeta, &theta_calculado);
+
+        xQueueOverwrite(ColaUsoVelAng, &vel_angular);
 
         // DELAY
         vTaskDelayUntil(&xLastWakeTime, xfrec);
@@ -511,6 +521,7 @@ void estimadorDePoscicionTask(void *pvParameters){
     float delta_y;
     float x_out = 0.0f;
     float y_out = 0.0f;
+    float v_ang = 0.0f;
 
     int reset_flag = 0;
 
@@ -525,11 +536,14 @@ void estimadorDePoscicionTask(void *pvParameters){
         xQueuePeek(ColaLectorVelIzq, &v_izq, 0);
         xQueuePeek(ColaLecturaTeta, &theta, 0);
         xQueuePeek(ColaUsoPosicion, &pos_ref, 0);
+        xQueuePeek(ColaUsoVelAng, &v_ang, 0);
 
         v_total = (v_der + v_izq) / 2.0f ;
         theta = theta * (M_PI / 180.0f); // Lo paso a rad/s
-        delta_x = (v_total) * cosf(theta) * (FRECUENCIA_ENCODER / 1000.0f); //ACA HAY QUE PONER LA FRECUENCIA A LA QUE SE CALCULO LA VELOCIDAD, HAY QUE ANDAR FIJANDOSE.
-        delta_y = (v_total) * sinf(theta) * (FRECUENCIA_ENCODER/ 1000.0f);
+
+
+        delta_x = ((v_total) * cosf(theta)   - DISTANCIA_H * v_ang * sinf(theta)) * (FRECUENCIA_ENCODER/ 1000.0f); //ACA HAY QUE PONER LA FRECUENCIA A LA QUE SE CALCULO LA VELOCIDAD, HAY QUE ANDAR FIJANDOSE.
+        delta_y = ((v_total) * sinf(theta)  + DISTANCIA_H * v_ang * cosf(theta) ) * (FRECUENCIA_ENCODER/ 1000.0f) ;
 
         x_out = x_out + delta_x;
         y_out = y_out + delta_y;

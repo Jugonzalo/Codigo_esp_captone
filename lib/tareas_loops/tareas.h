@@ -78,9 +78,11 @@ const float sentido_giro = 1.0f; // Convención de sentido de giro para la IMU (
 // Constantes 
 
 constexpr float RADIO_DE_RUEDA = 3.5f; // en cm
-constexpr float LARGO_ENTRE_RUEDAS = 18.2f;
-constexpr float PERIMETRO = 7 * M_PI;
+constexpr float LARGO_ENTRE_RUEDAS = 18.3f;
+constexpr float PERIMETRO = 7.0f * M_PI;
 constexpr float CM_POR_PULSO = PERIMETRO / 897;   // EN PROMEDIO LEI 8978 cm por vuelta
+
+constexpr float DISTANCIA_H = 5.6f;
 
 
 
