@@ -8,7 +8,7 @@
 
 void setup() {
   if (DEBUG) {
-    Serial.begin(115200);
+    Serial.begin(115200); // Inicializa la comunicación serial para depuración);
   }
 
 
@@ -16,6 +16,10 @@ void setup() {
   motorSetup();    // Inicializa motores y canales PWM
   setup_jetson();   // Configura la comunicación serial con Jetson
   setup_rtos(); // inicia todas las task
+
+
+  DEBUG_PRINTLN("setup_listo");
+  Serial_elejido.println("holi");
 } 
 
 // =============================================================================
