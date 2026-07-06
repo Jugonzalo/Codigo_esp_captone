@@ -61,9 +61,6 @@ QueueHandle_t ColaLecturaPosicion;
 QueueHandle_t ColaUsoPosicionRef;
 QueueHandle_t ColaLecturaPosicionRef;
 
-//DELTA DE LOS ENCODERS
-QueueHandle_t ColaUsoDeltaEncoders;
-
 //---------------------Colas Sensores de posicion ----------
 
 QueueHandle_t ColaUsoResetPos;
@@ -103,7 +100,7 @@ QuickPID pidAngulo(
         &teta_actual, &v_angular, &teta_ref,
         Kp_theta, Ki_theta, Kd_theta,
         QuickPID::pMode::pOnError,
-        QuickPID::dMode::dOnError,
+        QuickPID::dMode::dOnMeas,
         QuickPID::iAwMode::iAwCondition,
         QuickPID::Action::direct
     );

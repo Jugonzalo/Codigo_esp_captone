@@ -7,8 +7,6 @@
 
 extern String Modo_uso;
 
-extern HardwareSerial Serial_elejido;
-
 void setup_jetson();
 
 #endif // CONEXION_JETSON_H
