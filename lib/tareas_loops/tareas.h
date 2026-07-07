@@ -41,7 +41,7 @@ constexpr float Kp_motor_izquierdo = 2.0f;
 constexpr float Ki_motor_izquierdo  = 1.5f; 
 constexpr float Kd_motor_izquierdo  = 0.08f; 
 // Controlador de angulo (Hay que tunearlo)
-constexpr float Kp_theta = 0.3f; 
+constexpr float Kp_theta = 0.2f; 
 constexpr float Ki_theta  = 0.01f; 
 constexpr float Kd_theta  = 0.03f; 
 // Controldador de poscicion
@@ -54,7 +54,7 @@ constexpr float Kd_posicion  = 0.0f;
 
 // =========== VALORES MAXIMOS ==========
 const float V_CADA_RUEDA_MAX = 200.0f; 
-const float VEL_GIRO_MAX = 1.2f; // cm/s: diferencial maximo que pide el control de angulo
+const float VEL_GIRO_MAX = 0.8f; // cm/s: diferencial maximo que pide el control de angulo
 const float V_TOTAL_MAX = 15.0f; // cm/s
 
 const float UMBRAL_LLEGADA_POS = 1.2f; // cm: radio de aceptacion del target
@@ -78,7 +78,7 @@ const float sentido_giro = 1.0f; // Convención de sentido de giro para la IMU (
 // Constantes 
 
 constexpr float RADIO_DE_RUEDA = 3.5f; // en cm
-constexpr float LARGO_ENTRE_RUEDAS = 18.3f;
+constexpr float LARGO_ENTRE_RUEDAS = 18.2f;
 constexpr float PERIMETRO = 7.0f * M_PI;
 constexpr float CM_POR_PULSO = PERIMETRO / 897;   // EN PROMEDIO LEI 8978 cm por vuelta
 
@@ -158,7 +158,7 @@ extern QueueHandle_t ColaUsoVREFIzq, ColaLecturaVREFIzq, ColaUsoVREFDer, ColaLec
 extern QueueHandle_t ColaUsoVREFTotal, ColaLecturaVREFTotal;
 extern QueueHandle_t ColaUsoTeta, ColaLecturaTeta, ColaUsoTetaRef, ColaLecturaTetaRef;
 extern QueueHandle_t ColaUsoVelAng, ColaLecturaVelAng;
-extern QueueHandle_t ColaUsoPosicion, ColaLecturaPosicion, ColaUsoPosicionRef, ColaLecturaPosicionRef;
+extern QueueHandle_t ColaUsoPosicion, ColaLecturaPosicion, ColaUsoPosicionRef, ColaLecturaPosicionRef, ColaUsoDeltaEncoders;
 extern QueueHandle_t ColaLecturaSensores;
 extern QueueHandle_t ColaUsoResetPos;
 
