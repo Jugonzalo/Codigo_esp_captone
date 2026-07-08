@@ -5,7 +5,7 @@
 
 extern String Modo_uso;
 
-const int velocidad_serial = 38400;
+const int velocidad_serial = 115200;
 
 extern byte byte_inicio ; 
 

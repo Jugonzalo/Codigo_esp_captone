@@ -116,6 +116,10 @@ void pidControlDireccionAngularTask(void *pvParameters){
     float v_izq_out = 0.0f;
     float velocidad_total = 0.0f;
 
+    float aceleracion_maxima;
+    float v_der_anterior;
+    float v_izq_anterior;
+
     const float alpha = 0.15f;
     // LOOP
     for (;;){
@@ -142,6 +146,18 @@ void pidControlDireccionAngularTask(void *pvParameters){
         v_izq_out =  velocidad_total  -( v_angular * LARGO_ENTRE_RUEDAS)/ 2.0f;
         v_der_out = 2.0 * velocidad_total - v_izq_out;
 
+
+        // DEJARE FULL COMENTADO COMO HARIA A MAX
+        // dv = da * dt
+        // delta_v_der = v_der_out - v_der_anterior;
+        // delta_max = aceleracion_max * (Frecuencia_encoders/1000.0f)
+        // If (abs(delta_v_der) > delta_max){
+        //if (delta_v_der >= 0){
+        // v_out = v_out_anterior + delta_max;
+                 //}
+        // else {v_out_der = v_out_anterior - v_der_out;}}
+        // v_anterior = v_out;
+        //}
         
         
         xQueueOverwrite(ColaUsoVREFIzq, &v_izq_out);
@@ -312,66 +328,6 @@ void lecturaEncoders(void *pvparaameters){
     }
 }
 
-//IMU
-void lecturaImuTask(void *pvparameters){
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_LECTURA);
-    
-    Adafruit_ICM20948 icm;
-    DatosImu datosimu;
-    float yaw_acumulado = 0.0f;
-    float tiempo_anterior = 0.0f;
-    float bufGyroZ[3] = {0.0f, 0.0f, 0.0f};
-    float bufAccelX[3] = {0.0f, 0.0f, 0.0f};
-    float sentido_giro = 1.0f;
-
-
-
-
-    for(;;){
-        sensors_event_t accel, gyro, mag, temp;
-        icm.getEvent(&accel, &gyro, &temp, &mag);
-
-        // ── 1. Calcular dt ───────────────────────────────────────────
-        unsigned long ahora = micros();
-        float dt = (float)(ahora - tiempo_anterior) * 1e-6f; // segundos
-        tiempo_anterior = ahora;
-
-        // Guardia de seguridad: dt invalido -> devolvemos el ultimo estado sin integrar
-        if (dt <= 0.0001f || dt > 0.5f) {
-            datosimu.vel_angular = 0.0f;
-            datosimu.pos_angular   = yaw_acumulado;
-            datosimu.aceleracion_lineal   = 0.0f;
-        }
-        // Quitar el noise floor (calibracion) ───────────────────
-        float gz = gyro.gyro.z - gyroOffsetZ;             // gyroZ corregido [rad/s]
-        float ax = accel.acceleration.x - accelOffsetX;   // accelX corregido [m/s^2]
-
-        // Media movil de las ultimas 3 muestras ──────
-        bufGyroZ[2]  = bufGyroZ[1];  bufGyroZ[1]  = bufGyroZ[0];  bufGyroZ[0]  = gz;
-        bufAccelX[2] = bufAccelX[1]; bufAccelX[1] = bufAccelX[0]; bufAccelX[0] = ax;
-
-        gz = (bufGyroZ[0]  + bufGyroZ[1]  + bufGyroZ[2])  / 3.0f;
-        ax = (bufAccelX[0] + bufAccelX[1] + bufAccelX[2]) / 3.0f;
-
-        // ── 4. Velocidad angular en grados/s con signo de la convencion ──
-        float gyroZ_dps = sentido_giro * gz * 180.0f / PI; // horario+
-
-        // ── 5. Integracion de Euler con zona muerta anti-drift ───────
-        if (fabsf(gyroZ_dps) > Umbral_deslizamiento) {
-            yaw_acumulado += gyroZ_dps * dt;
-        }
-        yaw_acumulado = wrap180(yaw_acumulado);
-
-        // ── 6. Salidas ───────────────────────────────────────────────
-        datosimu.vel_angular = gyroZ_dps;
-        datosimu.pos_angular   = yaw_acumulado;
-        datosimu.aceleracion_lineal   = ax * 100.0f; //  cm/s^2 
-
-        //xQueueOverwrite(ColaLecturaVelAng, &datosimu.omega_dps);
-}
-
-}
 
 //Sensores de poscicion
 void SensoresPosicionTask(void *pvParameters){
@@ -447,7 +403,9 @@ void estimadorDePoscicionTask(void *pvParameters){
         delta_x = ((v_total) * cosf(theta)   - DISTANCIA_H * v_ang * sinf(theta)) * (FRECUENCIA_ENCODER/ 1000.0f); //ACA HAY QUE PONER LA FRECUENCIA A LA QUE SE CALCULO LA VELOCIDAD, HAY QUE ANDAR FIJANDOSE.
         delta_y = ((v_total) * sinf(theta)  + DISTANCIA_H * v_ang * cosf(theta) ) * (FRECUENCIA_ENCODER/ 1000.0f) ;
 
-
+        // ===== ACA COMENTARE LA OPCION SIN  V_ANGULAR ====
+        //delta_x = v_total * cosf(theta) * (FRECUENCIA_ENCODER/ 1000.0f);
+        //delta_y = v_total * sinf(theta) * (FRECUENCIA_ENCODER/ 1000.0f);
 
         //creo un delta en grados para que funcione con lo otro
         float theta_deg = theta * (180.0f / M_PI);
