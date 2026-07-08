@@ -4,7 +4,7 @@
 #include <tareas.h>
 #include <string.h>
 #include <math.h>
-
+#include <Debug_mode.h>
 
 // ------------- SWITCH MOTORES ----------------
 
@@ -547,9 +547,9 @@ void leerJetsonTaks(void *pvParameters){
     
     for (;;) {
         // Verificamos si hay al menos el tamaño de la estructura en el buffer
-        if (Serial_elejido.available() >= sizeof(Lectura)) {
+        if (Serial.available() >= sizeof(Lectura)) {
             // Leemos los bytes y los "volcamos" en la dirección de memoria de 'data_leida'
-            Serial_elejido.readBytes((uint8_t*)&data_leida, sizeof(data_leida));
+            Serial.readBytes((uint8_t*)&data_leida, sizeof(data_leida));
             // Validamos el header para no procesar basura
             if (data_leida.header == 0xAA) {
 
@@ -571,6 +571,7 @@ void leerJetsonTaks(void *pvParameters){
             xQueueOverwrite(ColaUsoVREFDer, &data_leida.v_der_ref);
             }
 
+            xQueueOverwrite(ColaUsoVREFIzq, &data_leida.v_izq_ref);
 
             // ------------------V_TOTAL_REF Teta_REF----------------
             if (Modo_uso == "v") { // FALSE SI NO QUIERES USARLO
@@ -591,14 +592,100 @@ void leerJetsonTaks(void *pvParameters){
             //pos ref
             xQueueOverwrite(ColaUsoResetPos, &data_leida.reset_pos);
             // LIMPIEZA
-            while (Serial_elejido.available() > 0) {Serial_elejido.read();}}// Descartamos el byte
+            while (Serial.available() > 0) {Serial.read();}}// Descartamos el byte
         else {// Si el header está mal, el buffer está desincronizado // Limpiamos todo
-            while (Serial_elejido.available() > 0) {Serial_elejido.read();}} // Descartamos el byte   
+            while (Serial.available() > 0) {Serial.read();}} // Descartamos el byte   
         
         }
     vTaskDelayUntil(&xLastWakeTime, xfrec);
     }
 }
+    
+
+typedef enum {
+    ESPERANDO_HEADER,
+    LEYENDO_PAYLOAD,
+} EstadoLectura;
+
+static uint8_t buffer_crudo[sizeof(Lectura)];
+static int bytes_leidos = 0;
+static EstadoLectura estado = ESPERANDO_HEADER;
+
+void procesarByte(uint8_t b, Lectura *data_leida) {
+    switch (estado) {
+        case ESPERANDO_HEADER:
+            if (b == 0xAA) {
+                buffer_crudo[0] = b;
+                bytes_leidos = 1;
+                estado = LEYENDO_PAYLOAD;
+            }
+            break;
+
+        case LEYENDO_PAYLOAD:
+            buffer_crudo[bytes_leidos++] = b;
+            if (bytes_leidos == sizeof(Lectura)) {
+                // ACA falta validar checksum antes de aceptar la trama
+                memcpy(data_leida, buffer_crudo, sizeof(Lectura));
+                estado = ESPERANDO_HEADER;
+            }
+            break;
+    }
+}
+
+
+void leerJetsonTaks2(void *pvParameters){
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_LECTURA);
+    Lectura data_leida;
+    Coordenadas pos;
+
+    for (;;) {
+        while (Serial_elejido.available() > 0) {
+            uint8_t b = Serial_elejido.read();
+            procesarByte(b, &data_leida);
+        }
+
+        // manejo de colas igual que antes...
+        
+            // ------------------------------MANEJO DE COLAS ------------------------------
+
+            //------------------DUTY----------------
+            if (Modo_uso == "d") { // FALSE SI NO QUIERES USARLO
+            xQueueOverwrite(ColaUsoDutyIzq, &data_leida.duty_izq);   
+            xQueueOverwrite(ColaUsoDutyDer, &data_leida.duty_der); 
+            }
+
+
+            // ------------------VREF_IZQ_DER----------------
+            if (false) { // FALSE SI NO QUIERES USARLO
+            xQueueOverwrite(ColaUsoVREFIzq, &data_leida.v_izq_ref);
+            xQueueOverwrite(ColaUsoVREFDer, &data_leida.v_der_ref);
+            }
+
+            xQueueOverwrite(ColaUsoVREFIzq, &data_leida.v_izq_ref);
+
+            // ------------------V_TOTAL_REF Teta_REF----------------
+            if (Modo_uso == "v") { // FALSE SI NO QUIERES USARLO
+                xQueueOverwrite(ColaUsoVREFTotal, &data_leida.v_total_ref);
+                xQueueOverwrite(ColaUsoTetaRef, &data_leida.teta_ref);
+            }
+            
+
+            // ------------------X_REF_Y_REF----------------
+            if (Modo_uso == "c"){
+                pos.x = data_leida.x_ref;
+                pos.y =  data_leida.y_ref;
+                xQueueOverwrite(ColaUsoPosicionRef, &pos);
+
+                xQueueOverwrite(ColaLecturaPosicionRef, &pos);
+            }
+
+
+        vTaskDelayUntil(&xLastWakeTime, xfrec);
+    }
+}
+
+
 /// ------------------------------------SETUP ------------------------------------
  
 void setup_rtos() {
@@ -715,7 +802,7 @@ void setup_rtos() {
      0 //core
     );
 
-    xTaskCreatePinnedToCore(leerJetsonTaks,  "leerdatos", 2048,  NULL, 4, NULL, 0);
+    xTaskCreatePinnedToCore(leerJetsonTaks2,  "leerdatos", 2048,  NULL, 4, NULL, 0);
 
     //===== LECTURAS =====
     //ENCODER

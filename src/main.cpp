@@ -16,10 +16,7 @@ void setup() {
   motorSetup();    // Inicializa motores y canales PWM
   setup_jetson();   // Configura la comunicación serial con Jetson
   setup_rtos(); // inicia todas las task
-
-
-  DEBUG_PRINTLN("setup_listo");
-  Serial_elejido.println("holi");
+  
 } 
 
 // =============================================================================

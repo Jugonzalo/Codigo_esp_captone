@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "conexion_jetson.h"
+#include<Debug_mode.h>
 
 String Modo_uso = "";
 
@@ -18,7 +19,7 @@ String Modo_uso = "";
 HardwareSerial Serial_elejido(1);
 
 
-
+byte byte_inicio  = 0xAE;
 
 void setup_jetson() {
 
@@ -26,18 +27,20 @@ void setup_jetson() {
   //
   //Serial.begin(velocidad_Serial_elejido);   // DECOMENTA PARA USAR WINDOWS
 
-  Serial_elejido.begin(115200, SERIAL_8N1, 21, 22);    //21=Rx   |   22=Tx     // DESCOMENTA PARA USAR JETSON
+  Serial_elejido.begin(velocidad_serial, SERIAL_8N1, 32, 14);    //21=Rx   |   14=Tx     // DESCOMENTA PARA USAR JETSON
 
 
-  delay(2000); // Esperamos un momento para asegurarnos de que la conexión serial esté establecida
   while (Serial.available() > 0) {
     Serial_elejido.read(); // Limpiamos el buffer al inicio
   }
-  Serial_elejido.println("Serial Jetson listo");
+  delay(1000);
+  Serial_elejido.write(byte_inicio);
   delay(1000); // Pequeña pausa para asegurar que el mensaje se envíe antes de continuar
-  if (Serial_elejido.available() != 0){
+  while (Serial_elejido.available() == 0){
     //llego un error, vuelvo a mandar la wea
-    Serial_elejido.println("Serial Jetson listo");
+    Serial_elejido.write(byte_inicio);
+    DEBUG_PRINT("sigoaqui");
+    delay(500);
   }
 
   // Espero hasta 5 segundos a que Python mande el byte de modo

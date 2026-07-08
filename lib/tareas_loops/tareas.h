@@ -12,20 +12,21 @@
 #include <conexion_jetson.h>
 #include <mat.h>
 
+
 // ---------Frecuencias-----------
 
-#define FRECUENCIA_LECTURA 50   //
-#define FRECUENCIA_ENVIO 50
-#define FRECUENCIA_ENCODER 5 // en MiliSeg, 1 es 1kz y 1000 es 1hz 
+#define FRECUENCIA_LECTURA 100   //
+#define FRECUENCIA_ENVIO 100
+#define FRECUENCIA_ENCODER 10 // en MiliSeg, 1 es 1kz y 1000 es 1hz 
 
 
 // ====== PINES DEL ENCODER ======
 // Motor 1 (Rueda Izquierda)
-#define pinA1 26 // GPIO14 (D5)   FASE A (AMARILLO )
-#define pinB1 27 // GPIO12 (D6) FASE B (VERDE)
+#define pinA1 34 // GPIO14 (D5)   FASE A (AMARILLO )
+#define pinB1 35 // GPIO12 (D6) FASE B (VERDE)
 // Motor 2 (Rueda Derecha)
-#define pinA2 34 // GPIO5 (D1)
-#define pinB2 35 // GPIO4 (D2)
+#define pinA2 26 // GPIO5 (D1)
+#define pinB2 27 // GPIO4 (D2)
 
 
 

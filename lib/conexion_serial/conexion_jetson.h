@@ -3,9 +3,11 @@
 
 #include <Arduino.h>
 
-#define velocidad_serial 115200
-
 extern String Modo_uso;
+
+const int velocidad_serial = 38400;
+
+extern byte byte_inicio ; 
 
 extern HardwareSerial Serial_elejido;
 
