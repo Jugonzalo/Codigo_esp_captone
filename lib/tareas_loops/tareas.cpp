@@ -116,9 +116,8 @@ void pidControlDireccionAngularTask(void *pvParameters){
     float v_izq_out = 0.0f;
     float velocidad_total = 0.0f;
 
-    float aceleracion_maxima;
-    float v_der_anterior;
-    float v_izq_anterior;
+    float v_der_anterior = 0.0f;
+    float v_izq_anterior = 0.0f;
 
     const float alpha = 0.15f;
     // LOOP
@@ -158,8 +157,35 @@ void pidControlDireccionAngularTask(void *pvParameters){
         // else {v_out_der = v_out_anterior - v_der_out;}}
         // v_anterior = v_out;
         //}
-        
-        
+
+        // LIMITADOR DE ACELERACION MAXIMA (implementacion de la idea de arriba)
+        // dt en segundos, en base a la frecuencia de la tarea (FRECUENCIA_ENCODER esta en ms)
+        float dt = FRECUENCIA_ENCODER / 1000.0f;
+        float delta_max = ACEL_MAX_RUEDAS * dt;
+
+        // RUEDA IZQUIERDA
+        if (true){
+            float delta_v_izq = v_izq_out - v_izq_anterior;
+            if (delta_v_izq > delta_max){
+                v_izq_out = v_izq_anterior + delta_max;
+            } else if (delta_v_izq < -delta_max){
+                v_izq_out = v_izq_anterior - delta_max;
+            }
+            v_izq_anterior = v_izq_out;
+        }
+
+        // RUEDA DERECHA
+        if (true){
+            float delta_v_der = v_der_out - v_der_anterior;
+            if (delta_v_der > delta_max){
+                v_der_out = v_der_anterior + delta_max;
+            } else if (delta_v_der < -delta_max){
+                v_der_out = v_der_anterior - delta_max;
+            }
+            v_der_anterior = v_der_out;
+        }
+
+
         xQueueOverwrite(ColaUsoVREFIzq, &v_izq_out);
         xQueueOverwrite(ColaUsoVREFDer, &v_der_out);
         xQueueOverwrite(ColaLecturaVelAng, &v_angular);

@@ -54,9 +54,10 @@ constexpr float Kd_posicion  = 0.0f;
 
 
 // =========== VALORES MAXIMOS ==========
-const float V_CADA_RUEDA_MAX = 200.0f; 
+const float V_CADA_RUEDA_MAX = 200.0f;
 const float VEL_GIRO_MAX = 0.8f; // cm/s: diferencial maximo que pide el control de angulo
 const float V_TOTAL_MAX = 15.0f; // cm/s
+const float ACEL_MAX_RUEDAS = 50.0f; // cm/s^2: rampa maxima de v_izq_out/v_der_out en el PID de angulo (Hay que tunearlo)
 
 const float UMBRAL_LLEGADA_POS = 1.2f; // cm: radio de aceptacion del target
 
