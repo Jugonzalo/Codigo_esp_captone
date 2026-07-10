@@ -143,7 +143,33 @@ void pidControlDireccionAngularTask(void *pvParameters){
 
         //Los transformo a velocidad de cada rueda
         v_izq_out =  velocidad_total  -( v_angular * LARGO_ENTRE_RUEDAS)/ 2.0f;
+
+                float dt = FRECUENCIA_ENCODER / 1000.0f;
+        float delta_max = ACEL_MAX_RUEDAS * dt;
+        // RUEDA IZQUIERDA
+        if (false){
+            float delta_v_izq = v_izq_out - v_izq_anterior;
+            if (delta_v_izq > delta_max){
+                v_izq_out = v_izq_anterior + delta_max;
+            } else if (delta_v_izq < -delta_max){
+                v_izq_out = v_izq_anterior - delta_max;
+            }
+            v_izq_anterior = v_izq_out;
+        }
+
+
+
         v_der_out = 2.0 * velocidad_total - v_izq_out;
+
+                if (false){
+            float delta_v_der = v_der_out - v_der_anterior;
+            if (delta_v_der > delta_max){
+                v_der_out = v_der_anterior + delta_max;
+            } else if (delta_v_der < -delta_max){
+                v_der_out = v_der_anterior - delta_max;
+            }
+            v_der_anterior = v_der_out;
+        }
 
 
         // DEJARE FULL COMENTADO COMO HARIA A MAX
@@ -160,30 +186,9 @@ void pidControlDireccionAngularTask(void *pvParameters){
 
         // LIMITADOR DE ACELERACION MAXIMA (implementacion de la idea de arriba)
         // dt en segundos, en base a la frecuencia de la tarea (FRECUENCIA_ENCODER esta en ms)
-        float dt = FRECUENCIA_ENCODER / 1000.0f;
-        float delta_max = ACEL_MAX_RUEDAS * dt;
-
-        // RUEDA IZQUIERDA
-        if (true){
-            float delta_v_izq = v_izq_out - v_izq_anterior;
-            if (delta_v_izq > delta_max){
-                v_izq_out = v_izq_anterior + delta_max;
-            } else if (delta_v_izq < -delta_max){
-                v_izq_out = v_izq_anterior - delta_max;
-            }
-            v_izq_anterior = v_izq_out;
-        }
 
         // RUEDA DERECHA
-        if (true){
-            float delta_v_der = v_der_out - v_der_anterior;
-            if (delta_v_der > delta_max){
-                v_der_out = v_der_anterior + delta_max;
-            } else if (delta_v_der < -delta_max){
-                v_der_out = v_der_anterior - delta_max;
-            }
-            v_der_anterior = v_der_out;
-        }
+
 
 
         xQueueOverwrite(ColaUsoVREFIzq, &v_izq_out);
@@ -312,9 +317,9 @@ void lecturaEncoders(void *pvparaameters){
         //Distancia de ciclo va a usarse pa los 2.
 
         //izq
-        distancia_del_ciclo_izq = count_actual_izq * CM_POR_PULSO;
+        distancia_del_ciclo_izq = count_actual_izq * CM_POR_PULSO_IZQ;
         //der        
-        distancia_del_ciclo_der = count_actual_der * CM_POR_PULSO;
+        distancia_del_ciclo_der = count_actual_der * CM_POR_PULSO_DER;
 
         delta_d.x = distancia_del_ciclo_izq;
         delta_d.y = distancia_del_ciclo_der;
@@ -425,11 +430,16 @@ void estimadorDePoscicionTask(void *pvParameters){
         
         delta_theta = (v_ang * (FRECUENCIA_ENCODER / 1000.0f));
 
-        theta = theta + delta_theta; // rad
+        // Integracion midpoint: uso el theta PROMEDIO del paso (inicio + medio
+        // giro) dentro de cos/sin, en vez del theta final. Reconstruye mejor la
+        // curva cuando theta cambia apreciablemente dentro de un mismo dt (giros)
+        // y ataca el error de Euler SIN tener que subir la frecuencia.
+        float theta_mid = theta + delta_theta * 0.5f;
 
+        delta_x = ((v_total) * cosf(theta_mid) - DISTANCIA_H * v_ang * sinf(theta_mid)) * (FRECUENCIA_ENCODER/ 1000.0f);
+        delta_y = ((v_total) * sinf(theta_mid) + DISTANCIA_H * v_ang * cosf(theta_mid)) * (FRECUENCIA_ENCODER/ 1000.0f);
 
-        delta_x = ((v_total) * cosf(theta)   - DISTANCIA_H * v_ang * sinf(theta)) * (FRECUENCIA_ENCODER/ 1000.0f); //ACA HAY QUE PONER LA FRECUENCIA A LA QUE SE CALCULO LA VELOCIDAD, HAY QUE ANDAR FIJANDOSE.
-        delta_y = ((v_total) * sinf(theta)  + DISTANCIA_H * v_ang * cosf(theta) ) * (FRECUENCIA_ENCODER/ 1000.0f) ;
+        theta = theta + delta_theta; // rad, actualizo al final del paso
 
         // ===== ACA COMENTARE LA OPCION SIN  V_ANGULAR ====
         //delta_x = v_total * cosf(theta) * (FRECUENCIA_ENCODER/ 1000.0f);
@@ -596,8 +606,6 @@ void leerJetsonTaks2(void *pvParameters){
             xQueueOverwrite(ColaUsoVREFIzq, &data_leida.v_izq_ref);
             xQueueOverwrite(ColaUsoVREFDer, &data_leida.v_der_ref);
             }
-
-            xQueueOverwrite(ColaUsoVREFIzq, &data_leida.v_izq_ref);
 
             // ------------------V_TOTAL_REF Teta_REF----------------
             if (Modo_uso == "v") { // FALSE SI NO QUIERES USARLO
