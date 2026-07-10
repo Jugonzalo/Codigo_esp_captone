@@ -376,6 +376,8 @@ void estimadorDePoscicionTask(void *pvParameters){
 
     int reset_flag = 0;
 
+    int reset_0 = 0;
+
     Coordenadas pos;
 
     Coordenadas pos_ref;
@@ -418,11 +420,20 @@ void estimadorDePoscicionTask(void *pvParameters){
         //VOY A DEJAR EL RESET SUJETO AL V_IZQ_REF,   ==================== RECUERDA PULIRLO=================
         xQueuePeek(ColaUsoResetPos, &reset_flag,0);
         xQueuePeek(ColaLecturaPosicionRef, &pos_ref, 0);
+        xQueuePeek(ColaUsoReset0, &reset_0,0);
+
 
 
         if (reset_flag){
             x_out = pos_ref.x;
             y_out = pos_ref.y;
+        }
+
+        if (reset_0){
+            x_out = 0;
+            y_out = 0;
+            theta_deg = 0;
+            theta = 0;
         }
 
         pos.x = x_out;
@@ -497,67 +508,7 @@ void enviarJetsonTask(void *pvParameters){
         vTaskDelayUntil(&xLastWakeTime, xfrec);
     }
 }
-void leerJetsonTaks(void *pvParameters){
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xfrec = pdMS_TO_TICKS(FRECUENCIA_LECTURA);
-    Lectura data_leida;
-    Coordenadas pos;
-    
-    for (;;) {
-        // Verificamos si hay al menos el tamaño de la estructura en el buffer
-        if (Serial.available() >= sizeof(Lectura)) {
-            // Leemos los bytes y los "volcamos" en la dirección de memoria de 'data_leida'
-            Serial.readBytes((uint8_t*)&data_leida, sizeof(data_leida));
-            // Validamos el header para no procesar basura
-            if (data_leida.header == 0xAA) {
 
-
-
-
-            // ------------------------------MANEJO DE COLAS ------------------------------
-
-            //------------------DUTY----------------
-            if (Modo_uso == "d") { // FALSE SI NO QUIERES USARLO
-            xQueueOverwrite(ColaUsoDutyIzq, &data_leida.duty_izq);   
-            xQueueOverwrite(ColaUsoDutyDer, &data_leida.duty_der); 
-            }
-
-
-            // ------------------VREF_IZQ_DER----------------
-            if (false) { // FALSE SI NO QUIERES USARLO
-            xQueueOverwrite(ColaUsoVREFIzq, &data_leida.v_izq_ref);
-            xQueueOverwrite(ColaUsoVREFDer, &data_leida.v_der_ref);
-            }
-
-            xQueueOverwrite(ColaUsoVREFIzq, &data_leida.v_izq_ref);
-
-            // ------------------V_TOTAL_REF Teta_REF----------------
-            if (Modo_uso == "v") { // FALSE SI NO QUIERES USARLO
-                xQueueOverwrite(ColaUsoVREFTotal, &data_leida.v_total_ref);
-                xQueueOverwrite(ColaUsoTetaRef, &data_leida.teta_ref);
-            }
-            
-
-            // ------------------X_REF_Y_REF----------------
-            if (Modo_uso == "c"){
-                pos.x = data_leida.x_ref;
-                pos.y =  data_leida.y_ref;
-                xQueueOverwrite(ColaUsoPosicionRef, &pos);
-
-                xQueueOverwrite(ColaLecturaPosicionRef, &pos);
-            }
-
-            //pos ref
-            xQueueOverwrite(ColaUsoResetPos, &data_leida.reset_pos);
-            // LIMPIEZA
-            while (Serial.available() > 0) {Serial.read();}}// Descartamos el byte
-        else {// Si el header está mal, el buffer está desincronizado // Limpiamos todo
-            while (Serial.available() > 0) {Serial.read();}} // Descartamos el byte   
-        
-        }
-    vTaskDelayUntil(&xLastWakeTime, xfrec);
-    }
-}
     
 
 typedef enum {
@@ -638,6 +589,10 @@ void leerJetsonTaks2(void *pvParameters){
                 xQueueOverwrite(ColaLecturaPosicionRef, &pos);
             }
 
+            // ------------------RESET_0 (comando int, solo cableado)----------------
+            xQueueOverwrite(ColaUsoReset0, &data_leida.reset_0);
+            xQueueOverwrite(ColaUsoResetPos, &data_leida.reset_pos);
+
 
         vTaskDelayUntil(&xLastWakeTime, xfrec);
     }
@@ -708,6 +663,8 @@ void setup_rtos() {
     ColaUsoDeltaEncoders = xQueueCreate(1, sizeof(Coordenadas));
     //reset pos
     ColaUsoResetPos = xQueueCreate(1, sizeof(float));
+    //reset_0 (comando int desde la Jetson)
+    ColaUsoReset0 = xQueueCreate(1, sizeof(int32_t));
 
 
 

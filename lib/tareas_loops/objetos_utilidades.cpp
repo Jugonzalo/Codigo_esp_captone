@@ -68,6 +68,9 @@ QueueHandle_t ColaUsoDeltaEncoders;
 
 QueueHandle_t ColaUsoResetPos;
 
+//reset_0 (comando int desde la Jetson)
+QueueHandle_t ColaUsoReset0;
+
 
 //---------------------Colas Sensores de posicion ----------
 

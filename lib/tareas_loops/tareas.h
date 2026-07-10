@@ -124,6 +124,7 @@ struct __attribute__((packed)) Lectura {
   float x_ref;
   float y_ref;
   float reset_pos;
+  int32_t reset_0;
 };
 
 struct __attribute__((packed)) Coordenadas {
@@ -162,6 +163,7 @@ extern QueueHandle_t ColaUsoVelAng, ColaLecturaVelAng;
 extern QueueHandle_t ColaUsoPosicion, ColaLecturaPosicion, ColaUsoPosicionRef, ColaLecturaPosicionRef, ColaUsoDeltaEncoders;
 extern QueueHandle_t ColaLecturaSensores;
 extern QueueHandle_t ColaUsoResetPos;
+extern QueueHandle_t ColaUsoReset0;
 
 // ---------------------PID VELOCIDAD---------------------
 extern float abs_velocidad_actual_izq, v_out_izq, abs_velocidad_ref_izq;
