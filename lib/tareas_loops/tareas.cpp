@@ -78,6 +78,7 @@ void pidMotorIzqTask(void *pvparameters){
         xQueueOverwrite(ColaLectorDutyIzq, &duty); // antes mandaba v_out, corregido
     }
 }
+
 void pidMotorDerTask(void *pvparameters){
 
     float velocidad_actual = 0.0f;
@@ -133,6 +134,8 @@ void pidControlDireccionAngularTask(void *pvParameters){
     float v_der_anterior = 0.0f;
     float v_izq_anterior = 0.0f;
 
+    float error_raw;
+
     const float alpha = 0.15f;
     int flag_obs = 0;
     // LOOP
@@ -145,6 +148,9 @@ void pidControlDireccionAngularTask(void *pvParameters){
 
         // EMA sobre el error (wrap primero para evitar problema 0/360)
         float error_raw = wrap180(teta_ref - teta_med);
+        if (false){
+            error_raw = teta_ref - teta_med;
+        }
         error = alpha * error_raw + (1.0f - alpha) * error;
 
         teta_actual = teta_ref - error;  // => (teta_ref - teta_actual) = error
@@ -166,6 +172,7 @@ void pidControlDireccionAngularTask(void *pvParameters){
 
         if (abs(error) < 1.0f){
             v_angular = 0.0f;
+
         }
         
         
@@ -201,6 +208,12 @@ void pidControlDireccionAngularTask(void *pvParameters){
             v_der_anterior = v_der_out;
         }
 
+        
+        if (abs(wrap180(abs(error))) > 20.0f) {
+        //if (false) {
+        v_total_out = 0.0f;
+        pidPosicion.SetOutputSum(0.0);
+        pidPosicion.Reset();}
 
         // DEJARE FULL COMENTADO COMO HARIA A MAX
         // dv = da * dt
@@ -292,8 +305,8 @@ void pidPosiciontask(void *pvparameters){
 
 
     // obligo a que ruede sobre si mismo si es que tiene un angulo muy grande.
-    if (abs(wrap180(theta_out - theta_actual)) > 10) {
-    //if (false) {
+    //if (abs(wrap180(theta_out - theta_actual)) > 20.0f) {
+    if (false) {
         v_total_out = 0.0f;
         pidPosicion.SetOutputSum(0.0);
         pidPosicion.Reset();
