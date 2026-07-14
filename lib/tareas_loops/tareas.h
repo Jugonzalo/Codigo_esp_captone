@@ -42,9 +42,9 @@ constexpr float Kp_motor_izquierdo = 2.0f;
 constexpr float Ki_motor_izquierdo  = 1.5f; 
 constexpr float Kd_motor_izquierdo  = 0.08f; 
 // Controlador de angulo (Hay que tunearlo)
-constexpr float Kp_theta = 0.035f; 
-constexpr float Ki_theta  = 0.0003f; 
-constexpr float Kd_theta  = 0.00f; 
+constexpr float Kp_theta = 0.2f; 
+constexpr float Ki_theta  = 0.01f; 
+constexpr float Kd_theta  = 0.03f; 
 // Controldador de poscicion
 constexpr float Kp_posicion = 0.00f;
 constexpr float Ki_posicion  = 0.06f;
@@ -55,7 +55,7 @@ constexpr float Kd_posicion  = 0.0f;
 
 // =========== VALORES MAXIMOS ==========
 const float V_CADA_RUEDA_MAX = 200.0f;
-const float VEL_GIRO_MAX = 1.5f; // cm/s: diferencial maximo que pide el control de angulo
+const float VEL_GIRO_MAX = 0.8f; // cm/s: diferencial maximo que pide el control de angulo
 const float V_TOTAL_MAX = 15.0f; // cm/s
 const float ACEL_MAX_RUEDAS = 3.0f; // cm/s^2: rampa maxima de v_izq_out/v_der_out en el PID de angulo (Hay que tunearlo)
 
@@ -80,7 +80,7 @@ const float sentido_giro = 1.0f; // Convención de sentido de giro para la IMU (
 // Constantes 
 
 constexpr float RADIO_DE_RUEDA = 3.5f; // en cm
-constexpr float LARGO_ENTRE_RUEDAS = 17.42557311;
+constexpr float LARGO_ENTRE_RUEDAS = 17.783;
 constexpr float PERIMETRO = 7.0f * M_PI;
 //constexpr float CM_POR_PULSO = PERIMETRO / 897;   // EN PROMEDIO LEI 8978 cm por vuelta
 
