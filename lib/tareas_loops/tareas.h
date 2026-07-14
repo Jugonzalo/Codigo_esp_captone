@@ -80,7 +80,7 @@ const float sentido_giro = 1.0f; // Convención de sentido de giro para la IMU (
 // Constantes 
 
 constexpr float RADIO_DE_RUEDA = 3.5f; // en cm
-constexpr float LARGO_ENTRE_RUEDAS = 18.2f;
+constexpr float LARGO_ENTRE_RUEDAS = 17.783;
 constexpr float PERIMETRO = 7.0f * M_PI;
 //constexpr float CM_POR_PULSO = PERIMETRO / 897;   // EN PROMEDIO LEI 8978 cm por vuelta
 
@@ -143,6 +143,7 @@ struct __attribute__((packed)) Lectura {
   float y_ref;
   float reset_pos;
   int32_t reset_0;
+  int32_t flag_obs;
 };
 
 struct __attribute__((packed)) Coordenadas {
@@ -182,6 +183,7 @@ extern QueueHandle_t ColaUsoPosicion, ColaLecturaPosicion, ColaUsoPosicionRef, C
 extern QueueHandle_t ColaLecturaSensores;
 extern QueueHandle_t ColaUsoResetPos;
 extern QueueHandle_t ColaUsoReset0;
+extern QueueHandle_t ColaUsoFlagObs;
 
 // ---------------------PID VELOCIDAD---------------------
 extern float abs_velocidad_actual_izq, v_out_izq, abs_velocidad_ref_izq;

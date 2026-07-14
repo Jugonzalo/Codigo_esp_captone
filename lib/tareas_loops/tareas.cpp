@@ -45,6 +45,7 @@ void pidMotorIzqTask(void *pvparameters){
     float v_ref_nueva;
 
     int   duty   = 0;
+    int flag_obs = 0;
 
     pidIzq.SetOutputLimits(-V_CADA_RUEDA_MAX, V_CADA_RUEDA_MAX);
     pidIzq.SetSampleTimeUs(FRECUENCIA_ENCODER * 1000.0f); // dt real del dato
@@ -55,6 +56,7 @@ void pidMotorIzqTask(void *pvparameters){
         xQueueReceive(ColaUsoVelIzq, &velocidad_actual, portMAX_DELAY);
         // v_ref es asincrono: tomo el ultimo valor sin bloquear
         xQueuePeek(ColaUsoVREFIzq, &v_ref_nueva, 0);
+        xQueuePeek(ColaUsoFlagObs, &flag_obs, 0);
         
         //v_ref_suavizada = alpha * v_ref_nueva + (1.0f - alpha) * v_ref_suavizada;
 
@@ -67,6 +69,11 @@ void pidMotorIzqTask(void *pvparameters){
         int duty_magnitud = calcularDuty(abs_velocidad_ref_izq, v_out_izq, M1_m, M1_b, M1_MIN_DUTY);
         duty = (v_ref_nueva < 0) ? -duty_magnitud : duty_magnitud;
 
+        if (flag_obs) {
+            duty = 0;
+            pidIzq.Reset();
+        }
+
         xQueueSend(ColaUsoDutyIzq, &duty, 0);
         xQueueOverwrite(ColaLectorDutyIzq, &duty); // antes mandaba v_out, corregido
     }
@@ -76,7 +83,7 @@ void pidMotorDerTask(void *pvparameters){
     float velocidad_actual = 0.0f;
     float v_ramp_ref       = 0.0f;
     int   duty              = 0;
-
+    int flag_obs = 0;
 
     pidDer.SetOutputLimits(-V_CADA_RUEDA_MAX, V_CADA_RUEDA_MAX);
     pidDer.SetSampleTimeUs(FRECUENCIA_ENCODER * 1000);
@@ -85,6 +92,8 @@ void pidMotorDerTask(void *pvparameters){
     for (;;) {
         xQueueReceive(ColaUsoVelDer, &velocidad_actual, portMAX_DELAY);
         xQueuePeek(ColaUsoVREFDer, &v_ramp_ref, 0);
+        xQueuePeek(ColaUsoFlagObs, &flag_obs, 0);
+
 
         //Podria intentar escalonar el ref
         // casos raros   20 + 15 = 10  //   -40 - 35 
@@ -95,6 +104,11 @@ void pidMotorDerTask(void *pvparameters){
 
         int duty_magnitud = calcularDuty(abs_velocidad_ref_der, v_out_der, M2_m, M2_b, M2_MIN_DUTY);
         duty = (v_ramp_ref < 0) ? -duty_magnitud : duty_magnitud;
+
+         if (flag_obs) {
+            duty = 0;
+            pidDer.Reset();
+        }
 
         xQueueSend(ColaUsoDutyDer, &duty, 0);
         xQueueOverwrite(ColaLectorDutyDer, &duty);
@@ -120,12 +134,14 @@ void pidControlDireccionAngularTask(void *pvParameters){
     float v_izq_anterior = 0.0f;
 
     const float alpha = 0.15f;
+    int flag_obs = 0;
     // LOOP
     for (;;){
         // LEO REFERENCIA, MEDIDA Y VELOCIDAD DE AVANCE
         xQueueReceive(ColaUsoTeta,    &teta_med, portMAX_DELAY);
         xQueuePeek(ColaUsoTetaRef,   &teta_ref ,0);
         xQueuePeek(ColaUsoVREFTotal, &velocidad_total,0);
+        xQueuePeek(ColaUsoFlagObs, &flag_obs, 0);
 
         // EMA sobre el error (wrap primero para evitar problema 0/360)
         float error_raw = wrap180(teta_ref - teta_med);
@@ -135,16 +151,30 @@ void pidControlDireccionAngularTask(void *pvParameters){
 
         pidAngulo.Compute();
 
+        if (flag_obs){
+            pidAngulo.Reset();
+        }
+
+
+
+        // MODO AJUSTAR VELOCIDAD ANGULAR 
+        if (false){
+            xQueuePeek(ColaUsoVelAng, &v_angular, 0);
+            v_angular = v_angular /10.0f;
+        }
+
+
         if (abs(error) < 1.0f){
             v_angular = 0.0f;
         }
         
-
+        
 
         //Los transformo a velocidad de cada rueda
         v_izq_out =  velocidad_total  -( v_angular * LARGO_ENTRE_RUEDAS)/ 2.0f;
+        v_der_out = 2.0 * velocidad_total - v_izq_out;
 
-                float dt = FRECUENCIA_ENCODER / 1000.0f;
+        float dt = FRECUENCIA_ENCODER / 1000.0f;
         float delta_max = ACEL_MAX_RUEDAS * dt;
         // RUEDA IZQUIERDA
         if (false){
@@ -159,7 +189,7 @@ void pidControlDireccionAngularTask(void *pvParameters){
 
 
 
-        v_der_out = 2.0 * velocidad_total - v_izq_out;
+        
 
                 if (false){
             float delta_v_der = v_der_out - v_der_anterior;
@@ -263,6 +293,7 @@ void pidPosiciontask(void *pvparameters){
 
     // obligo a que ruede sobre si mismo si es que tiene un angulo muy grande.
     if (abs(wrap180(theta_out - theta_actual)) > 10) {
+    //if (false) {
         v_total_out = 0.0f;
         pidPosicion.SetOutputSum(0.0);
         pidPosicion.Reset();
@@ -611,6 +642,7 @@ void leerJetsonTaks2(void *pvParameters){
             if (Modo_uso == "v") { // FALSE SI NO QUIERES USARLO
                 xQueueOverwrite(ColaUsoVREFTotal, &data_leida.v_total_ref);
                 xQueueOverwrite(ColaUsoTetaRef, &data_leida.teta_ref);
+                xQueueOverwrite(ColaUsoVelAng, &data_leida.v_der_ref);
             }
             
 
@@ -626,6 +658,9 @@ void leerJetsonTaks2(void *pvParameters){
             // ------------------RESET_0 (comando int, solo cableado)----------------
             xQueueOverwrite(ColaUsoReset0, &data_leida.reset_0);
             xQueueOverwrite(ColaUsoResetPos, &data_leida.reset_pos);
+
+            // ------------------FLAG_OBS (flag int, solo cableado)----------------
+            xQueueOverwrite(ColaUsoFlagObs, &data_leida.flag_obs);
 
 
         vTaskDelayUntil(&xLastWakeTime, xfrec);
@@ -699,6 +734,8 @@ void setup_rtos() {
     ColaUsoResetPos = xQueueCreate(1, sizeof(float));
     //reset_0 (comando int desde la Jetson)
     ColaUsoReset0 = xQueueCreate(1, sizeof(int32_t));
+    //flag_obs (flag int de obstaculo desde la Jetson)
+    ColaUsoFlagObs = xQueueCreate(1, sizeof(int32_t));
 
 
 

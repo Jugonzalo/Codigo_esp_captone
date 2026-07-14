@@ -71,6 +71,9 @@ QueueHandle_t ColaUsoResetPos;
 //reset_0 (comando int desde la Jetson)
 QueueHandle_t ColaUsoReset0;
 
+//flag_obs (flag int de obstaculo desde la Jetson)
+QueueHandle_t ColaUsoFlagObs;
+
 
 //---------------------Colas Sensores de posicion ----------
 
